@@ -240,6 +240,11 @@ Versioning/backward compatibility:
 - Reconnect sync + retry banner trigger semantics → FR-019/020.
 - Multi-member propagation across two household devices for each mutation → FR-030.
 
+Current runnable Android implementation note:
+- Household synchronization uses server-source-of-truth snapshot fetch + mutation posts with periodic polling refresh.
+- Android sync URL is hard-coded to `https://list.friedman-makers.com` and routes through Cloudflare tunnel to local API (`0.0.0.0:8789`).
+- Runtime startup can be executed with one command: `./scripts/sync/start-sync-stack.sh`.
+
 ### Contract Tests
 - REST endpoints request/response schemas and backward-compat rules.
 - WebSocket event envelope schema and ordering semantics.

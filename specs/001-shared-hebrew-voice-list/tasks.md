@@ -218,6 +218,17 @@
 - [x] T123 [P] Fix Android transcript separation for prefixed conjunction+quantity phrase "ושלוש" in android/app/src/main/java/com/superlist/SuperListApp.kt
 - [x] T124 [P] Add Android unit regression test for phrase "שני לחם וגבינה אחת ושלוש מוצרלה" in android/app/src/test/java/com/superlist/TranscriptSeparationTest.kt
 - [x] T125 [P] Add connected-device instrumentation regression test for the same phrase in android/app/src/androidTest/java/com/superlist/realdevice/TranscriptSeparationConnectedTest.kt
+- [x] T126 [P] Implement Android local list persistence across app restart in android/app/src/main/java/com/superlist/SuperListApp.kt
+- [x] T127 [P] Implement Android household server sync client (GET snapshot + POST mutations + polling refresh) in android/app/src/main/java/com/superlist/SuperListApp.kt
+- [x] T128 [P] Add Android network permissions for shared household sync in android/app/src/main/AndroidManifest.xml
+- [x] T129 [P] Implement runnable local household sync API server in api/server.js and api/package.json
+- [x] T130 Update quickstart with local sync server startup and Android server URL configuration in specs/001-shared-hebrew-voice-list/quickstart.md
+- [x] T131 [P] Configure Cloudflare tunnel DNS route for list.friedman-makers.com to household sync tunnel
+- [x] T132 [P] Configure cloudflared ingress to route list.friedman-makers.com to local API service
+- [x] T133 [P] Add sync runtime helper scripts for API and tunnel in scripts/sync/start-api.sh and scripts/sync/start-cloudflared-tunnel.sh
+- [x] T134 [P] Set Android default sync URL to public Cloudflare hostname in android/app/src/main/java/com/superlist/SuperListApp.kt
+- [x] T135 [P] Add one-command sync stack launcher script for API+tunnel in scripts/sync/start-sync-stack.sh
+- [x] T136 [P] Remove editable sync URL field and keep Cloudflare sync endpoint hard-coded in android/app/src/main/java/com/superlist/SuperListApp.kt
 
 ---
 
@@ -285,6 +296,8 @@
 - **FR-018/019/020** -> T049, T051, T052-T055 -> tests/artifacts/mobile-device-runs/android-critical-flow/report.junit.xml
 - **FR-024/025/027/028 + NFR-011..014** -> T017, T058, T073, T074 -> specs/001-shared-hebrew-voice-list/checklists/release-readiness.md
 - **FR-029/030/031/032 + NFR-016/017** -> T075-T090, T091-T094 -> tests/artifacts/mobile-device-runs/two-member-sync/
+- **FR-029/030/031/032 + NFR-016/017** -> T075-T090, T091-T094, T127-T130 -> api/server.js, android/app/src/main/java/com/superlist/SuperListApp.kt
+- **FR-029/030/031/032 + NFR-016/017** -> T075-T090, T091-T094, T127-T136 -> api/server.js, scripts/sync/, android/app/src/main/java/com/superlist/SuperListApp.kt
 - **FR-033/034 + NFR-018** -> T095-T098 -> tests/artifacts/mobile-device-runs/android-critical-flow/
 - **FR-040/041/042/043/044** -> T106-T118, T123-T125 -> android/app/src/test/java/com/superlist/TranscriptSeparationTest.kt, android/app/src/androidTest/java/com/superlist/realdevice/TranscriptSeparationConnectedTest.kt
 - **FR-045** -> T121-T122 -> android/app/src/main/java/com/superlist/SuperListApp.kt, specs/001-shared-hebrew-voice-list/quickstart.md

@@ -340,6 +340,14 @@ the list and the second device receives the update within defined sync SLA.
 - **NFR-017**: Sync propagation reliability to online household devices MUST be >=99.5% for successful
   accepted mutations in the measurement window.
 
+#### Deployment & Runtime Topology (current implementation)
+
+- **NFR-019**: Android sync endpoint is fixed to `https://list.friedman-makers.com` for shared-list operations.
+- **NFR-020**: Internet-access sync path MUST route through Cloudflare Tunnel to local API service
+  (`127.0.0.1:8789`) on the host machine.
+- **NFR-021**: For continuous household sync, host machine runtime processes (local API + tunnel)
+  MUST remain online.
+
 ## Data and Compliance Constraints
 
 1. Only approved voice input, approved Hebrew speech-to-text output, and user-created entries are

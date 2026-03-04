@@ -1,7 +1,11 @@
 package com.superlist
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
+import java.net.HttpURLConnection
+import java.net.URL
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
@@ -38,10 +42,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
@@ -55,20 +61,101 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.Normalizer
+import org.json.JSONArray
+import org.json.JSONObject
 
 @Composable
 fun SuperListApp() {
+    val context = LocalContext.current
+    val prefs = remember(context) {
+        context.getSharedPreferences(SUPER_LIST_PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
     var screen by remember { mutableStateOf("voice") }
     var householdCode by remember { mutableStateOf(generateHouseholdCode()) }
     var familyMembers by remember { mutableStateOf(1) }
     var syncConnected by remember { mutableStateOf(false) }
     var syncStatus by remember { mutableStateOf("לא מחובר למשפחה") }
-    val items = remember {
-        mutableStateListOf(
-            GroceryItem(name = "חלב", quantity = 1),
-            GroceryItem(name = "לחם", quantity = 1),
-        )
+    val items = remember(prefs) {
+        mutableStateListOf<GroceryItem>().apply {
+            addAll(loadPersistedItems(prefs))
+        }
+    }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(items.toList()) {
+        persistItems(prefs, items)
+    }
+
+    fun replaceItemsFromServer(serverItems: List<GroceryItem>) {
+        items.clear()
+        items.addAll(serverItems)
+    }
+
+    fun pushAddOrMerge(parsed: ParsedVoiceItem) {
+        if (!syncConnected) return
+
+        scope.launch {
+            val ok = HouseholdSyncApi.pushAddOrMerge(
+                baseUrl = SYNC_SERVER_URL,
+                householdId = householdCode,
+                itemName = parsed.name,
+                quantity = parsed.quantity,
+            )
+
+            if (ok) {
+                val latest = HouseholdSyncApi.fetchList(SYNC_SERVER_URL, householdCode)
+                if (latest != null) {
+                    replaceItemsFromServer(latest)
+                    syncStatus = "מסונכרן למשפחה"
+                }
+            } else {
+                syncStatus = "שגיאת סנכרון — ננסה שוב"
+            }
+        }
+    }
+
+    fun pushRemoveMany(removedItems: List<GroceryItem>) {
+        if (!syncConnected || removedItems.isEmpty()) return
+
+        scope.launch {
+            var allOk = true
+            removedItems.forEach { item ->
+                val ok = HouseholdSyncApi.pushRemove(
+                    baseUrl = SYNC_SERVER_URL,
+                    householdId = householdCode,
+                    itemName = item.name,
+                )
+                if (!ok) {
+                    allOk = false
+                }
+            }
+
+            val latest = HouseholdSyncApi.fetchList(SYNC_SERVER_URL, householdCode)
+            if (latest != null) {
+                replaceItemsFromServer(latest)
+            }
+            syncStatus = if (allOk) "סנכרון מחיקה נשלח" else "שגיאת סנכרון במחיקה"
+        }
+    }
+
+    LaunchedEffect(syncConnected, householdCode) {
+        if (!syncConnected || householdCode.isBlank()) {
+            return@LaunchedEffect
+        }
+
+        while (syncConnected) {
+            val latest = HouseholdSyncApi.fetchList(SYNC_SERVER_URL, householdCode)
+            if (latest != null) {
+                replaceItemsFromServer(latest)
+            }
+            delay(1500)
+        }
     }
 
     val addParsedItem: (ParsedVoiceItem) -> Unit = addParsed@{ parsed ->
@@ -85,7 +172,8 @@ fun SuperListApp() {
         }
 
         if (syncConnected) {
-            syncStatus = "מסונכרן למשפחה: ${parsed.name} ×${parsed.quantity}"
+            syncStatus = "מסנכרן למשפחה..."
+            pushAddOrMerge(parsed)
         }
     }
 
@@ -159,19 +247,24 @@ fun SuperListApp() {
                         }
                     },
                     onRemoveSelected = { selected ->
+                        val removedSnapshot = selected
+                            .sorted()
+                            .mapNotNull { index -> items.getOrNull(index) }
+
                         selected.sortedDescending().forEach { index ->
                             if (index in items.indices) {
                                 items.removeAt(index)
                             }
                         }
                         if (syncConnected && selected.isNotEmpty()) {
-                            syncStatus = "סנכרון מחיקה נשלח ל-$familyMembers חברי משפחה"
+                            pushRemoveMany(removedSnapshot)
                         }
                     },
                     onClearAll = {
+                        val removedSnapshot = items.toList()
                         items.clear()
                         if (syncConnected) {
-                            syncStatus = "הרשימה כולה נוקתה וסונכרנה למשפחה"
+                            pushRemoveMany(removedSnapshot)
                         }
                     },
                 )
@@ -337,10 +430,10 @@ private fun VoiceTab(onAdd: (String) -> Unit, onAddParsed: (ParsedVoiceItem) -> 
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
         Text("דיבור רציף בזמן לחיצה")
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(72.dp))
         Box(
             modifier = Modifier
-                .size(144.dp)
+                .size(196.dp)
                 .clip(CircleShape)
                 .background(if (isHolding || isRecognizing) Color(0xFFB71C1C) else Color(0xFFD32F2F))
                 .pointerInput(Unit) {
@@ -386,7 +479,12 @@ private fun VoiceTab(onAdd: (String) -> Unit, onAddParsed: (ParsedVoiceItem) -> 
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Text("לחץ ודבר", color = Color.White)
+            Text(
+                text = "לחץ ודבר",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineMedium,
+                textAlign = TextAlign.Center,
+            )
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -667,6 +765,112 @@ private data class GroceryItem(
     val name: String,
     val quantity: Int,
 )
+
+private const val SUPER_LIST_PREFS_NAME = "super_list_prefs"
+private const val SUPER_LIST_ITEMS_KEY = "persisted_items"
+private const val SYNC_SERVER_URL = "https://list.friedman-makers.com"
+
+private fun loadPersistedItems(prefs: SharedPreferences): List<GroceryItem> {
+    val raw = prefs.getString(SUPER_LIST_ITEMS_KEY, null) ?: return emptyList()
+
+    return runCatching {
+        val array = JSONArray(raw)
+        buildList {
+            for (i in 0 until array.length()) {
+                val entry = array.optJSONObject(i) ?: continue
+                val name = entry.optString("name").trim()
+                val quantity = entry.optInt("quantity", 1).coerceIn(1, 99)
+                if (name.isNotBlank()) {
+                    add(GroceryItem(name = name, quantity = quantity))
+                }
+            }
+        }
+    }.getOrDefault(emptyList())
+}
+
+private fun persistItems(prefs: SharedPreferences, items: List<GroceryItem>) {
+    val array = JSONArray()
+    items.forEach { item ->
+        val obj = JSONObject()
+            .put("name", item.name)
+            .put("quantity", item.quantity.coerceIn(1, 99))
+        array.put(obj)
+    }
+
+    prefs.edit().putString(SUPER_LIST_ITEMS_KEY, array.toString()).apply()
+}
+
+private object HouseholdSyncApi {
+    suspend fun fetchList(baseUrl: String, householdId: String): List<GroceryItem>? = withContext(Dispatchers.IO) {
+        runCatching {
+            val url = URL("${baseUrl.trimEnd('/')}/households/${householdId}/list")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 4000
+                readTimeout = 4000
+            }
+
+            conn.inputStream.bufferedReader().use { reader ->
+                val json = JSONObject(reader.readText())
+                val itemsArray = json.optJSONArray("items") ?: JSONArray()
+                buildList {
+                    for (i in 0 until itemsArray.length()) {
+                        val item = itemsArray.optJSONObject(i) ?: continue
+                        val name = item.optString("name").trim()
+                        val quantity = item.optInt("quantity", 1).coerceIn(1, 99)
+                        if (name.isNotBlank()) {
+                            add(GroceryItem(name, quantity))
+                        }
+                    }
+                }
+            }
+        }.getOrNull()
+    }
+
+    suspend fun pushAddOrMerge(baseUrl: String, householdId: String, itemName: String, quantity: Int): Boolean =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val url = URL("${baseUrl.trimEnd('/')}/households/${householdId}/mutations")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                }
+
+                val body = JSONObject()
+                    .put("clientActionId", "android-${System.currentTimeMillis()}")
+                    .put("actionType", "ADD_OR_MERGE")
+                    .put("itemName", itemName)
+                    .put("quantityDelta", quantity.coerceIn(1, 99))
+
+                conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
+                conn.responseCode in 200..299
+            }.getOrDefault(false)
+        }
+
+    suspend fun pushRemove(baseUrl: String, householdId: String, itemName: String): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val url = URL("${baseUrl.trimEnd('/')}/households/${householdId}/mutations")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 4000
+                readTimeout = 4000
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+            }
+
+            val body = JSONObject()
+                .put("clientActionId", "android-${System.currentTimeMillis()}-${itemName.hashCode()}")
+                .put("actionType", "REMOVE")
+                .put("itemName", itemName)
+
+            conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
+            conn.responseCode in 200..299
+        }.getOrDefault(false)
+    }
+}
 
 internal data class ParsedVoiceItem(
     val name: String,

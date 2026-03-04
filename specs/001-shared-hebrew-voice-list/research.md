@@ -143,3 +143,24 @@ All technical context unknowns for MVP planning are resolved from approved defau
 	- Unit: `separates_items_with_prefixed_vav_and_following_quantity_phrase()` in `android/app/src/test/java/com/superlist/TranscriptSeparationTest.kt`.
 	- Connected device: `separates_prefixed_vav_with_quantity_phrase_on_connected_device()` in `android/app/src/androidTest/java/com/superlist/realdevice/TranscriptSeparationConnectedTest.kt`.
 - **Validation evidence**: Android local + connected tests passed and updated debug/release APKs were installed on the connected device.
+
+### 2026-03-04 — Family list not shared across devices after app restart
+
+- **Reported symptom**: After adding items and reopening app, list state was not converging across family devices; one device could show local-only state while another showed different state.
+- **Root cause**: Android app state was local-memory only and lacked a runnable household source-of-truth backend integration path.
+- **Fix implemented**:
+	- Added Android local persistence across restarts (SharedPreferences JSON cache).
+	- Added Android sync client for household snapshot fetch + mutation post + polling refresh loop.
+	- Switched Android sync endpoint to fixed project URL (`https://list.friedman-makers.com`).
+	- Added runnable local household sync API server (`api/server.js`) with idempotent mutation handling and household list snapshot endpoint.
+- **Operational note**: API + tunnel run on local PC and must stay online for continuous synchronization.
+
+### 2026-03-04 — Internet access for family sync via custom domain
+
+- **Goal**: Allow household list synchronization outside local network boundaries.
+- **Implementation**:
+	- Cloudflare DNS route configured: `list.friedman-makers.com` -> existing named tunnel.
+	- Tunnel ingress mapped to local API service (`http://127.0.0.1:8789`).
+	- Android default sync URL switched to `https://list.friedman-makers.com`.
+	- Runtime helper scripts added under `scripts/sync/`, including one-command stack startup (`start-sync-stack.sh`).
+- **Constraint**: Because API runs on local PC, PC and tunnel process must remain online for continuous family sync.

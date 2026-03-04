@@ -19,6 +19,19 @@ Validate MVP core flows and gate evidence for:
 4. Approved Hebrew STT integration configured.
 5. Metrics/log dashboards available.
 
+## Local shared-sync server setup (current runnable path)
+
+1. Install backend dependencies:
+   - `cd api && npm install`
+2. Start API + Cloudflare tunnel together:
+   - `./scripts/sync/start-sync-stack.sh`
+3. Ensure server route is active:
+   - server binds to `0.0.0.0:8789`
+   - Cloudflare Tunnel public hostname: `https://list.friedman-makers.com`
+4. Android sync URL is hard-coded to `https://list.friedman-makers.com` (no per-device URL input required).
+5. Use same household code on all family devices.
+6. Keep this PC online while syncing (API + tunnel run on this host).
+
 ## Real-device command prerequisites (exact)
 
 1. Android SDK platform-tools installed and `adb` available.
@@ -87,8 +100,9 @@ Expected outputs:
 5. On phone A, add items by voice and by manual input.
 6. On phone B, remove one selected item and approve deletion.
 7. Verify sync status text updates after add/remove actions on both devices.
+8. Close and reopen app on phone B; verify list restores from server snapshot.
 
-Note: current Android app screen provides household join/sync-status workflow for family testing. For true backend-validated cross-device realtime convergence, run this scenario against deployed backend/sync endpoints and production telemetry.
+Note: current runnable implementation uses a lightweight local API server with household source-of-truth + polling convergence in Android.
 
 ## Scenario B: Accidental tap filter
 
