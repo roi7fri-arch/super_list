@@ -1,0 +1,5 @@
+<testsuite name="two-member-sync-real-device" tests="1" failures="1" errors="0" skipped="0">
+  <testcase classname="com.superlist.sync" name="android-ios-two-member-sync">
+    <failure message="BLOCKED: missing connected Android and/or iOS device execution evidence">See device-sync.log</failure>
+  </testcase>
+</testsuite>

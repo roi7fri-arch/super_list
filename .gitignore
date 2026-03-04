@@ -1,0 +1,38 @@
+# Node.js / TypeScript
+node_modules/
+dist/
+build/
+*.log
+.env*
+
+# iOS / Swift
+.build/
+DerivedData/
+*.swiftpm/
+Packages/
+
+# Android / Kotlin / Java
+.gradle/
+out/
+*.class
+*.jar
+*.iml
+
+# Mobile build artifacts
+android/.cxx/
+android/app/build/
+ios/build/
+
+# Test and coverage artifacts
+coverage/
+.nyc_output/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# OS/temp
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp

@@ -1,0 +1,32 @@
+{
+  "configurations" : [
+    {
+      "id" : "E4D34E2A-REAL-DEVICE-CONFIG-0001",
+      "name" : "Real Device",
+      "options" : {
+        "targetForVariableExpansion" : {
+          "containerPath" : "container:ios",
+          "identifier" : "SuperListApp",
+          "name" : "SuperListApp"
+        }
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:ios",
+      "identifier" : "SuperListApp",
+      "name" : "SuperListApp"
+    }
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:ios",
+        "identifier" : "SuperListUITests",
+        "name" : "SuperListUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

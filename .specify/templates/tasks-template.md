@@ -8,9 +8,14 @@ description: "Task list template for feature implementation"
 **Input**: Design documents from `/specs/[###-feature-name]/`
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification.
+**Tests**: Test tasks are REQUIRED by constitution. Every feature MUST include appropriate unit,
+integration, and (for critical journeys) e2e coverage. Every bugfix MUST include a regression test.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+
+**Shared-list Rule**: For shared household list features, include explicit tasks for backend
+source-of-truth synchronization, realtime mutation broadcast, client subscription/local merge,
+fallback polling, offline replay, household-scoped authorization, and sync SLA evidence.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -51,6 +56,10 @@ description: "Task list template for feature implementation"
 - [ ] T001 Create project structure per implementation plan
 - [ ] T002 Initialize [language] project with [framework] dependencies
 - [ ] T003 [P] Configure linting and formatting tools
+- [ ] T004 [P] Configure strict type-checking in CI
+- [ ] T005 [P] Enforce protected branch and pull-request review rules
+- [ ] T006 [P] Configure he-IL locale defaults and RTL layout testing baseline
+- [ ] T007 [P] Define SLO dashboard baselines for voice latency, sync latency, and availability
 
 ---
 
@@ -62,12 +71,16 @@ description: "Task list template for feature implementation"
 
 Examples of foundational tasks (adjust based on your project):
 
-- [ ] T004 Setup database schema and migrations framework
-- [ ] T005 [P] Implement authentication/authorization framework
-- [ ] T006 [P] Setup API routing and middleware structure
-- [ ] T007 Create base models/entities that all stories depend on
-- [ ] T008 Configure error handling and logging infrastructure
-- [ ] T009 Setup environment configuration management
+- [ ] T008 Setup database schema and migrations framework
+- [ ] T009 [P] Implement authentication/authorization with household-based authorization
+- [ ] T010 [P] Setup API routing and middleware structure
+- [ ] T011 Create base models/entities that all stories depend on
+- [ ] T012 Configure error handling and structured logging with correlation IDs
+- [ ] T013 Setup environment configuration and secrets management
+- [ ] T014 Define health/readiness/metrics endpoints or platform equivalents
+- [ ] T015 Define baseline alert rules for critical flows and SLO breach risk
+- [ ] T016 Implement microphone-consent flow scaffolding and permission-revocation handling
+- [ ] T017 Enforce privacy constraints (no long-term raw audio retention, no third-party data sale)
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -79,21 +92,26 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 1 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 1 (MANDATORY) ⚠️
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T010 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T011 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T018 [P] [US1] Unit tests for core logic in tests/unit/test_[name].py
+- [ ] T019 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
+- [ ] T020 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T021 [US1] E2E test for critical path in tests/e2e/test_[name].py
+- [ ] T122 [US1] Real-device two-member sync flow evidence in tests/artifacts/mobile-device-runs/[name]/report.junit.xml
 
 ### Implementation for User Story 1
 
-- [ ] T012 [P] [US1] Create [Entity1] model in src/models/[entity1].py
-- [ ] T013 [P] [US1] Create [Entity2] model in src/models/[entity2].py
-- [ ] T014 [US1] Implement [Service] in src/services/[service].py (depends on T012, T013)
-- [ ] T015 [US1] Implement [endpoint/feature] in src/[location]/[file].py
-- [ ] T016 [US1] Add validation and error handling
-- [ ] T017 [US1] Add logging for user story 1 operations
+- [ ] T022 [P] [US1] Create [Entity1] model in src/models/[entity1].py
+- [ ] T023 [P] [US1] Create [Entity2] model in src/models/[entity2].py
+- [ ] T024 [US1] Implement [Service] in src/services/[service].py (depends on T022, T023)
+- [ ] T025 [US1] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T026 [US1] Add validation and error/empty/loading states
+- [ ] T027 [US1] Add he-IL text and RTL UX behavior for user-facing surfaces
+- [ ] T028 [US1] Add accessibility semantics, keyboard and focus support
+- [ ] T029 [US1] Add performance instrumentation and budget assertions
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -105,17 +123,19 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 2 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 2 (MANDATORY) ⚠️
 
-- [ ] T018 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T019 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T030 [P] [US2] Unit tests for core logic in tests/unit/test_[name].py
+- [ ] T031 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
+- [ ] T032 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T033 [US2] E2E test for critical path in tests/e2e/test_[name].py
 
 ### Implementation for User Story 2
 
-- [ ] T020 [P] [US2] Create [Entity] model in src/models/[entity].py
-- [ ] T021 [US2] Implement [Service] in src/services/[service].py
-- [ ] T022 [US2] Implement [endpoint/feature] in src/[location]/[file].py
-- [ ] T023 [US2] Integrate with User Story 1 components (if needed)
+- [ ] T034 [P] [US2] Create [Entity] model in src/models/[entity].py
+- [ ] T035 [US2] Implement [Service] in src/services/[service].py
+- [ ] T036 [US2] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T037 [US2] Integrate with User Story 1 components (if needed)
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -127,16 +147,18 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 3 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 3 (MANDATORY) ⚠️
 
-- [ ] T024 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T025 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T038 [P] [US3] Unit tests for core logic in tests/unit/test_[name].py
+- [ ] T039 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
+- [ ] T040 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T041 [US3] E2E test for critical path in tests/e2e/test_[name].py
 
 ### Implementation for User Story 3
 
-- [ ] T026 [P] [US3] Create [Entity] model in src/models/[entity].py
-- [ ] T027 [US3] Implement [Service] in src/services/[service].py
-- [ ] T028 [US3] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T042 [P] [US3] Create [Entity] model in src/models/[entity].py
+- [ ] T043 [US3] Implement [Service] in src/services/[service].py
+- [ ] T044 [US3] Implement [endpoint/feature] in src/[location]/[file].py
 
 **Checkpoint**: All user stories should now be independently functional
 
@@ -153,8 +175,17 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX [P] Documentation updates in docs/
 - [ ] TXXX Code cleanup and refactoring
 - [ ] TXXX Performance optimization across all stories
-- [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
+- [ ] TXXX [P] Verify endpoint p95/p99 and frontend usability budgets with evidence artifacts
+- [ ] TXXX [P] Verify product SLOs: voice update p95 < 2.5s, sync p95 < 1.0s, availability >= 99.5%
+- [ ] TXXX [P] Validate Hebrew he-IL and RTL-first UX for release-critical screens
+- [ ] TXXX [P] Validate backward compatibility and deprecation notes for contract changes
+- [ ] TXXX [P] Confirm least-privilege, data minimization, retention, and secrets compliance
+- [ ] TXXX [P] Validate consent UX and permission-revocation behavior for microphone capture
 - [ ] TXXX Security hardening
+- [ ] TXXX [P] Add regression tests for every bugfix included in scope
+- [ ] TXXX [P] Confirm release criteria evidence for voice add, shared sync, and select/remove flows
+- [ ] TXXX [P] Capture sync propagation latency and delivery success evidence in tests/artifacts/mobile-device-runs/
+- [ ] TXXX [P] Save Android+iOS connected-device two-member sync logs/reports in tests/artifacts/mobile-device-runs/
 - [ ] TXXX Run quickstart.md validation
 
 ---
@@ -178,7 +209,7 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Within Each User Story
 
-- Tests (if included) MUST be written and FAIL before implementation
+- Tests MUST be written and FAIL before implementation
 - Models before services
 - Services before endpoints
 - Core implementation before integration
@@ -198,7 +229,7 @@ Examples of foundational tasks (adjust based on your project):
 ## Parallel Example: User Story 1
 
 ```bash
-# Launch all tests for User Story 1 together (if tests requested):
+# Launch all tests for User Story 1 together:
 Task: "Contract test for [endpoint] in tests/contract/test_[name].py"
 Task: "Integration test for [user journey] in tests/integration/test_[name].py"
 

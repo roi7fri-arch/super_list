@@ -1,0 +1,26 @@
+name: Android Quality
+
+on:
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-quality.yml'
+
+jobs:
+  lint-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Run lint
+        working-directory: android
+        run: ./gradlew lint
+      - name: Run Kotlin compile checks
+        working-directory: android
+        run: ./gradlew assembleDebug

@@ -1,0 +1,131 @@
+# Phase 0 Research: Shared Hebrew Voice Shopping List (Mobile)
+
+## Decision 1: Mobile architecture
+
+**Decision**: Native UI per platform (SwiftUI for iOS, Jetpack Compose for Android) with a shared Kotlin Multiplatform domain module for parsing, queueing, and sync rules.
+
+**Rationale**: Native UI provides the strongest RTL, accessibility, microphone-permission, and haptic behavior. Shared domain logic prevents drift in conflict resolution and offline replay behavior.
+
+**Alternatives considered**:
+- Full cross-platform UI framework: rejected for higher risk in nuanced native permission/accessibility behavior.
+- Separate native-only business logic: rejected due to duplicated conflict/offline logic and higher defect risk.
+
+---
+
+## Decision 2: Real-time sync strategy
+
+**Decision**: Use idempotent REST for writes and household-scoped WebSocket events for fan-out, backed by local pending action queue on device.
+
+**Rationale**: REST gives deterministic write semantics; WebSockets satisfy near real-time sync; local queue preserves user actions during connectivity loss.
+
+**Alternatives considered**:
+- Polling-only sync: rejected due to latency/cost tradeoff and difficulty meeting sync p95 target.
+- Full CRDT model: rejected as unnecessary complexity for approved LWW/remove-wins policy.
+
+---
+
+## Decision 3: Hebrew speech recognition and parsing
+
+**Decision**: Streaming transcription with approved Hebrew STT provider; parse transcript on release into item update event; support quantity words + digits 1-99; default quantity to 1 when omitted.
+
+**Rationale**: Streaming lowers end-to-end latency and improves interactive UX. Bounded quantity grammar improves precision and testability.
+
+**Alternatives considered**:
+- On-device-only STT: rejected for variable quality across devices in MVP.
+- Batch transcription on stop: rejected due to higher latency.
+
+---
+
+## Decision 4: Conflict resolution semantics
+
+**Decision**: Server-authoritative ordering via server timestamp with deterministic tie-break key; apply last-write-wins; if latest is remove, removal wins; persist append-only activity log.
+
+**Rationale**: Aligns exactly with approved product policy and gives transparent auditability.
+
+**Alternatives considered**:
+- Client timestamp ordering: rejected due to clock skew risk.
+- Manual conflict resolution UI: rejected as explicit MVP non-goal.
+
+---
+
+## Decision 5: Data storage model
+
+**Decision**:
+- Backend primary store: PostgreSQL for households, memberships, item projections, and event log.
+- Realtime fan-out and ephemeral presence: Redis.
+- Mobile local state + pending queue: SQLite.
+
+**Rationale**: Relational integrity is required for authorization boundaries and event consistency. Local durable queue supports offline guarantees.
+
+**Alternatives considered**:
+- NoSQL-only backend: rejected for weaker transactional ergonomics in membership+event consistency.
+- In-memory queue on client: rejected due to data-loss risk.
+
+---
+
+## Decision 6: Duplicate normalization strategy
+
+**Decision**: Normalize item names (Unicode normalization, trim, case fold, punctuation/spacing normalization) and merge when normalized key matches.
+
+**Rationale**: Meets approved duplicate behavior while avoiding heavy linguistic inference.
+
+**Alternatives considered**:
+- Aggressive stemming/fuzzy auto-merge: rejected due to false positive risk.
+
+---
+
+## Decision 7: Offline and retry behavior
+
+**Decision**: Queue add/remove actions locally when offline; replay on reconnect in enqueue order with idempotency key; show Hebrew retry banner on persistent failures.
+
+**Rationale**: Meets spec reliability and user feedback requirements.
+
+**Alternatives considered**:
+- Blocking edits while offline: rejected as poor UX and contrary to approved default.
+
+---
+
+## Decision 8: Privacy and compliance handling
+
+**Decision**: Do not persist raw audio after transcription completion; retain only structured item-update events for limited audit period; enforce explicit microphone consent and revocation-aware behavior.
+
+**Rationale**: Aligns with legal/privacy constraints and constitution gates.
+
+**Alternatives considered**:
+- Raw audio retention for QA: rejected due to policy prohibition.
+
+---
+
+## Decision 9: Test strategy
+
+**Decision**: Test pyramid with explicit contract and E2E coverage for critical flows:
+- Unit: parser, normalization, conflict logic, queue replay.
+- Integration: auth/household boundaries, write+sync pipeline, reconnect replay.
+- Contract: REST + event schema compatibility.
+- E2E: iOS/Android core flows in he-IL RTL.
+
+**Rationale**: Balances fast feedback and high confidence for cross-client sync behavior.
+
+**Alternatives considered**:
+- E2E-heavy only: rejected due to execution cost/flakiness.
+- Unit-only: rejected due to inadequate distributed-system confidence.
+
+---
+
+## Decision 10: SLO measurement strategy
+
+**Decision**: Measure and report:
+- Voice pipeline latency (press to committed list update),
+- Sync propagation latency (server commit to other client render),
+- Availability SLI from successful request and heartbeat checks.
+
+**Rationale**: Directly maps to SC-002/SC-003/SC-004 and release gate criteria.
+
+**Alternatives considered**:
+- Aggregate endpoint-only latency: rejected because it misses client-perceived voice pipeline and cross-device sync timing.
+
+---
+
+## Clarification Resolution Status
+
+All technical context unknowns for MVP planning are resolved from approved defaults and research. No open NEEDS CLARIFICATION items remain.

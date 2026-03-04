@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DIST_VERSION="8.7"
+DIST_NAME="gradle-${DIST_VERSION}-bin"
+DIST_ZIP="${DIST_NAME}.zip"
+DIST_URL="https://services.gradle.org/distributions/${DIST_ZIP}"
+CACHE_DIR="${HOME}/.gradle-wrapper-lite"
+DIST_DIR="${CACHE_DIR}/gradle-${DIST_VERSION}"
+GRADLE_BIN="${DIST_DIR}/bin/gradle"
+
+mkdir -p "${CACHE_DIR}"
+
+if [[ ! -x "${GRADLE_BIN}" ]]; then
+  echo "Bootstrapping Gradle ${DIST_VERSION}..."
+  TMP_ZIP="${CACHE_DIR}/${DIST_ZIP}"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "${DIST_URL}" -o "${TMP_ZIP}"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "${TMP_ZIP}" "${DIST_URL}"
+  else
+    echo "ERROR: curl or wget is required to download Gradle." >&2
+    exit 1
+  fi
+
+  if ! command -v unzip >/dev/null 2>&1; then
+    echo "ERROR: unzip is required to extract Gradle distribution." >&2
+    exit 1
+  fi
+
+  unzip -q -o "${TMP_ZIP}" -d "${CACHE_DIR}"
+fi
+
+exec "${GRADLE_BIN}" --project-dir "${ROOT_DIR}" "$@"

@@ -27,6 +27,18 @@ You **MUST** consider the user input before proceeding (if not empty).
 3. **Execute plan workflow**: Follow the structure in IMPL_PLAN template to:
    - Fill Technical Context (mark unknowns as "NEEDS CLARIFICATION")
    - Fill Constitution Check section from constitution
+   - Include mandatory household synchronization requirement for shared-list features (near-real-time cross-device sync within household)
+   - Include architecture decision for realtime sync transport (WebSocket or equivalent) with fallback polling strategy
+   - Include data model coverage for Household, Membership, SharedListItem, ListEvent, DeviceActionQueue
+   - Include API/contract coverage for subscribe/get household list, add/update/remove item, and replay endpoint (if used)
+   - Include explicit server-authoritative conflict resolution policy (timestamp LWW + remove precedence)
+   - Include offline/reconnect retry-backoff strategy
+   - Include observability metrics for sync latency, delivery success rate, and replay failure alerts
+   - Include household-scoped authorization model on all list operations
+   - Include test strategy mapped to requirements with contract + integration + e2e + real-device two-family-device sync tests
+   - For mobile scope, include real-device execution strategy (Android USB debugging and iOS physical-device run path where available)
+   - For mobile scope, include required tools/prerequisites and local PC command flow for physical-device test execution
+   - For mobile scope, require evidence artifacts: machine-readable test report, logs, and pass/fail summary for the critical voice-to-list flow
    - Evaluate gates (ERROR if violations unjustified)
    - Phase 0: Generate research.md (resolve all NEEDS CLARIFICATION)
    - Phase 1: Generate data-model.md, contracts/, quickstart.md
@@ -88,3 +100,5 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 - Use absolute paths
 - ERROR on gate failures or unresolved clarifications
+- For mobile features, ERROR if physical-device execution plan, command flow, and evidence artifacts are missing
+- For shared-list features, ERROR if mandatory household synchronization architecture/contracts/tests are missing

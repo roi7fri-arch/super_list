@@ -1,0 +1,32 @@
+# VCS
+.git/
+.gitignore
+
+# Node / JS
+node_modules/
+dist/
+build/
+
+# Android / iOS artifacts
+android/.gradle/
+android/app/build/
+android/build/
+ios/build/
+DerivedData/
+
+# Logs and temp
+*.log
+*.log*
+*.tmp
+
+# Env and secrets
+.env
+.env*
+
+# Coverage and test output
+coverage/
+.nyc_output/
+
+# Docker files
+Dockerfile*
+.dockerignore

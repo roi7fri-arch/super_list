@@ -1,0 +1,27 @@
+name: API Quality
+
+on:
+  pull_request:
+    paths:
+      - 'api/**'
+      - '.github/workflows/api-quality.yml'
+
+jobs:
+  lint-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        working-directory: api
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Lint
+        working-directory: api
+        run: npm run lint --if-present
+      - name: Typecheck
+        working-directory: api
+        run: npm run typecheck --if-present

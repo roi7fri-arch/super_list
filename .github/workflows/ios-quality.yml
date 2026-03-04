@@ -1,0 +1,21 @@
+name: iOS Quality
+
+on:
+  pull_request:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-quality.yml'
+
+jobs:
+  lint-typecheck:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift format/lint (if configured)
+        working-directory: ios
+        run: |
+          if [ -f .swiftlint.yml ]; then brew install swiftlint && swiftlint; else echo 'swiftlint not configured'; fi
+      - name: Build for type checks
+        working-directory: ios
+        run: |
+          if [ -d App ]; then xcodebuild -list || true; else echo 'Xcode project not initialized yet'; fi

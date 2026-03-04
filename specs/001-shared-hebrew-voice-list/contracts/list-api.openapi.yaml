@@ -1,0 +1,293 @@
+openapi: 3.1.0
+info:
+  title: Super List API
+  version: 1.0.0
+  description: |
+    v1 contract for Shared Hebrew Voice Shopping List (Mobile).
+    Backward compatibility policy:
+    - Additive fields are non-breaking.
+    - Breaking changes require new major API version.
+servers:
+  - url: https://api.superlist.example.com/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: HouseholdList
+  - name: Activity
+paths:
+  /households/{householdId}/list:
+    get:
+      tags: [HouseholdList]
+      summary: Fetch current household list snapshot
+      operationId: getHouseholdList
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '200':
+          description: Current list state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSnapshotResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /households/{householdId}/items:addByVoice:
+    post:
+      tags: [HouseholdList]
+      summary: Add/merge item parsed from voice transcript
+      operationId: addItemByVoice
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoiceAddRequest'
+      responses:
+        '200':
+          description: Item add/merge applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListMutationResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /households/{householdId}/items/{itemId}:remove:
+    post:
+      tags: [HouseholdList]
+      summary: Remove selected item from list
+      operationId: removeItem
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoveItemRequest'
+      responses:
+        '200':
+          description: Item removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListMutationResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /households/{householdId}/activity:
+    get:
+      tags: [Activity]
+      summary: Fetch household activity log
+      operationId: getActivityLog
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityLogResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    HouseholdId:
+      name: householdId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication required
+    Forbidden:
+      description: Household authorization failed
+
+  schemas:
+    VoiceAddRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - clientActionId
+        - transcriptText
+      properties:
+        clientActionId:
+          type: string
+          description: Idempotency key generated on client
+        transcriptText:
+          type: string
+          description: Transcript text in Hebrew or mixed text
+        locale:
+          type: string
+          enum: [he-IL]
+        source:
+          type: string
+          enum: [VOICE]
+        sttConfidence:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    RemoveItemRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - clientActionId
+      properties:
+        clientActionId:
+          type: string
+        source:
+          type: string
+          enum: [MANUAL, OFFLINE_REPLAY]
+
+    ListSnapshotResponse:
+      type: object
+      required: [householdId, items, serverTime]
+      properties:
+        householdId:
+          type: string
+          format: uuid
+        serverTime:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListItem'
+
+    ListItem:
+      type: object
+      required: [itemId, normalizedName, displayNameHe, quantity, isRemoved, updatedAt]
+      properties:
+        itemId:
+          type: string
+          format: uuid
+        normalizedName:
+          type: string
+        displayNameHe:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        isRemoved:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+
+    ListMutationResponse:
+      type: object
+      required: [eventId, householdId, item, serverTimestamp]
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        householdId:
+          type: string
+          format: uuid
+        serverTimestamp:
+          type: string
+          format: date-time
+        item:
+          $ref: '#/components/schemas/ListItem'
+
+    ActivityLogResponse:
+      type: object
+      required: [events]
+      properties:
+        nextCursor:
+          type: string
+          nullable: true
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListEvent'
+
+    ListEvent:
+      type: object
+      required:
+        - eventId
+        - householdId
+        - actorUserId
+        - actionType
+        - normalizedName
+        - serverTimestamp
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        householdId:
+          type: string
+          format: uuid
+        actorUserId:
+          type: string
+          format: uuid
+        actionType:
+          type: string
+          enum: [ADD_OR_MERGE, REMOVE]
+        normalizedName:
+          type: string
+        displayNameHe:
+          type: string
+        quantityDelta:
+          type: integer
+          nullable: true
+        resultingQuantity:
+          type: integer
+          nullable: true
+        source:
+          type: string
+          enum: [VOICE, MANUAL, OFFLINE_REPLAY]
+        serverTimestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required: [code, messageHe]
+      properties:
+        code:
+          type: string
+        messageHe:
+          type: string
+          description: Hebrew-first user message

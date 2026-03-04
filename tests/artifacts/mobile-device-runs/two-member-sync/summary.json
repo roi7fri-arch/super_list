@@ -1,0 +1,8 @@
+{
+  "status": "blocked",
+  "phase": "implementation",
+  "androidReport": "present-passed",
+  "iosReport": "present-failed",
+  "syncLog": "present",
+  "reason": "Android evidence is available; iOS physical-device execution remains unavailable in this Linux environment"
+}

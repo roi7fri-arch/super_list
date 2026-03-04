@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://superlist.example.com/contracts/v1/sync-events.schema.json",
+  "title": "Super List Household Sync Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "eventType",
+    "eventId",
+    "correlationId",
+    "householdId",
+    "actorUserId",
+    "actionType",
+    "item",
+    "serverTimestamp"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "eventType": {
+      "type": "string",
+      "enum": ["LIST_ITEM_MUTATED"]
+    },
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "correlationId": {
+      "type": "string"
+    },
+    "householdId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "actorUserId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "actionType": {
+      "type": "string",
+      "enum": ["ADD_OR_MERGE", "REMOVE"]
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["itemId", "normalizedName", "displayNameHe", "isRemoved", "updatedAt"],
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "normalizedName": {
+          "type": "string"
+        },
+        "displayNameHe": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "isRemoved": {
+          "type": "boolean"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "serverTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ordering": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "policy": {
+          "type": "string",
+          "enum": ["SERVER_TIMESTAMP_LWW_REMOVE_WINS"]
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["VOICE", "MANUAL", "OFFLINE_REPLAY"]
+        },
+        "clientActionId": {
+          "type": "string"
+        },
+        "sttConfidence": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  },
+  "description": "Household real-time event contract. Backward compatibility: additive fields only in v1.x; breaking changes require version bump."
+}

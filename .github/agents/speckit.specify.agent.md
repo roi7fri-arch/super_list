@@ -98,6 +98,40 @@ Given that feature description, do this:
 
 5. Write the specification to SPEC_FILE using the template structure, replacing placeholders with concrete details derived from the feature description (arguments) while preserving section order and headings.
 
+### Mandatory Mobile Physical-Device Testing Policy
+
+When the feature scope includes mobile apps (iOS and/or Android), the specification MUST include all of the following as testable requirements and acceptance criteria:
+
+1. Automated mobile tests MUST run on at least one physical device connected by USB to the developer machine (emulator-only is insufficient).
+2. At least one critical end-to-end flow MUST pass on a connected real device. For voice/list features, the minimum flow is:
+   - press red voice button -> Hebrew recognition -> shared list update -> item removal.
+3. Acceptance criteria MUST explicitly cover Android physical-device execution and iOS physical-device execution where platform support exists.
+4. Test outputs MUST include machine-readable results and execution logs, saved as local/CI artifacts.
+
+If this policy is not included for mobile scope, the specification is incomplete and must be revised before completion.
+
+### Mandatory Shared Household Sync Requirement
+
+For shared shopping-list features, the specification MUST include this requirement explicitly:
+
+"The supermarket list MUST be synchronized in near-real-time between all family members who
+installed the app and joined the same household."
+
+The spec MUST also include all of the following as concrete, testable requirements:
+
+1. Backend is the source of truth for the shared household list.
+2. Each list mutation is broadcast to all online devices in the same household.
+3. Offline clients queue actions and replay on reconnect.
+4. Conflict resolution policy is explicit and testable.
+
+The requirement MUST be reflected in:
+- User stories (explicit cross-device sync story),
+- Functional requirements,
+- Non-functional requirements,
+- Edge cases,
+- Roles/permissions,
+- Success criteria.
+
 6. **Specification Quality Validation**: After writing the initial spec, validate it against quality criteria:
 
    a. **Create Spec Quality Checklist**: Generate a checklist file at `FEATURE_DIR/checklists/requirements.md` using the checklist template structure with these validation items:
@@ -133,6 +167,8 @@ Given that feature description, do this:
       - [ ] User scenarios cover primary flows
       - [ ] Feature meets measurable outcomes defined in Success Criteria
       - [ ] No implementation details leak into specification
+      - [ ] Mobile scope includes physical-device automated test requirements (if mobile feature)
+      - [ ] Shared-list scope includes mandatory near-real-time household sync requirements and evidence
       
       ## Notes
       

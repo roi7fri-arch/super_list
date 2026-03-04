@@ -38,6 +38,13 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Generate dependency graph showing user story completion order
    - Create parallel execution examples per user story
    - Validate task completeness (each user story has all needed tasks, independently testable)
+    - For shared-list features, enforce mandatory household synchronization tasks:
+       - Backend shared-list source-of-truth model and sync event pipeline
+       - Client realtime subscription + local state merge + reconnect fallback polling
+       - Offline queue/replay tasks with explicit conflict handling
+       - Household-scoped authorization tasks on all list operations
+       - Tests: unit merge/conflict, integration multi-member propagation, e2e two-member sync, and real-device connected-phone validation
+       - Acceptance/evidence tasks for sync latency SLA and propagation success rate
 
 4. **Generate tasks.md**: Use `.specify/templates/tasks-template.md` as structure, fill with:
    - Correct feature name from plan.md
@@ -69,6 +76,8 @@ The tasks.md should be immediately executable - each task must be specific enoug
 **CRITICAL**: Tasks MUST be organized by user story to enable independent implementation and testing.
 
 **Tests are OPTIONAL**: Only generate test tasks if explicitly requested in the feature specification or if user requests TDD approach.
+
+**Exception**: For shared-list features with constitution test gates, tests are mandatory.
 
 ### Checklist Format (REQUIRED)
 
