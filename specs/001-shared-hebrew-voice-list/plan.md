@@ -229,8 +229,8 @@ Versioning/backward compatibility:
 ### Unit Tests
 - Hebrew quantity parser (words/digits 1-99, default=1) → FR-009/010/011.
 - Name normalization/duplicate merge → FR-013.
-- Multi-item transcript separation (`וגם`, `ולחם`, punctuation/`ואז`) including regression phrase
-  `שני חלב וגם לחם` → FR-042/043/044.
+- Multi-item transcript separation (`וגם`, standalone `ו`, `ולחם`, `ושלוש`, punctuation/`ואז`)
+  including regression phrases `שני חלב וגם לחם` and `שני לחם וגבינה אחת ושלוש מוצרלה` → FR-042/043/044.
 - Conflict resolver (LWW/remove-wins) → FR-021/022.
 - Offline queue replay/idempotency → FR-018/019.
 

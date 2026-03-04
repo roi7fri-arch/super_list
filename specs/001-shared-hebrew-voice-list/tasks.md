@@ -215,6 +215,9 @@
 - [x] T120 Update quickstart with release distribution and family share/sync validation workflow in specs/001-shared-hebrew-voice-list/quickstart.md
 - [x] T121 [P] Implement one-press clear-list action on Android list screen in android/app/src/main/java/com/superlist/SuperListApp.kt
 - [x] T122 Update spec/plan/quickstart for clear-list behavior and validation workflow in specs/001-shared-hebrew-voice-list/
+- [x] T123 [P] Fix Android transcript separation for prefixed conjunction+quantity phrase "ושלוש" in android/app/src/main/java/com/superlist/SuperListApp.kt
+- [x] T124 [P] Add Android unit regression test for phrase "שני לחם וגבינה אחת ושלוש מוצרלה" in android/app/src/test/java/com/superlist/TranscriptSeparationTest.kt
+- [x] T125 [P] Add connected-device instrumentation regression test for the same phrase in android/app/src/androidTest/java/com/superlist/realdevice/TranscriptSeparationConnectedTest.kt
 
 ---
 
@@ -283,7 +286,7 @@
 - **FR-024/025/027/028 + NFR-011..014** -> T017, T058, T073, T074 -> specs/001-shared-hebrew-voice-list/checklists/release-readiness.md
 - **FR-029/030/031/032 + NFR-016/017** -> T075-T090, T091-T094 -> tests/artifacts/mobile-device-runs/two-member-sync/
 - **FR-033/034 + NFR-018** -> T095-T098 -> tests/artifacts/mobile-device-runs/android-critical-flow/
-- **FR-040/041/042/043/044** -> T106-T118 -> android/app/src/test/java/com/superlist/TranscriptSeparationTest.kt, android/app/src/androidTest/java/com/superlist/realdevice/TranscriptSeparationConnectedTest.kt
+- **FR-040/041/042/043/044** -> T106-T118, T123-T125 -> android/app/src/test/java/com/superlist/TranscriptSeparationTest.kt, android/app/src/androidTest/java/com/superlist/realdevice/TranscriptSeparationConnectedTest.kt
 - **FR-045** -> T121-T122 -> android/app/src/main/java/com/superlist/SuperListApp.kt, specs/001-shared-hebrew-voice-list/quickstart.md
 - **GT-003 real-device requirement** -> T059-T070, T072 -> tests/artifacts/mobile-device-runs/
 

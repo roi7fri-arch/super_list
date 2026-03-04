@@ -106,6 +106,7 @@ Note: current Android app screen provides household join/sync-status workflow fo
    - `לחם ×1`
 5. Optionally verify additional separators in one utterance:
    - "ביצים, גבינה, ואז מלפפונים"
+   - "שני לחם וגבינה אחת ושלוש מוצרלה" → expected: `לחם ×2`, `גבינה ×1`, `מוצרלה ×3`
 
 ## Scenario D: Select/remove + persistent control
 

@@ -299,12 +299,14 @@ the list and the second device receives the update within defined sync SLA.
   selected-item count so remove confirmation is immediately accessible.
 - **FR-041**: Android red voice circle MUST toggle continuous dictation mode directly
   by press-and-hold behavior (active while pressed, stop on release) as the default speech interaction.
-- **FR-042**: Transcript parsing MUST recognize conjunction separators (for example "וגם") to
-  support adding multiple items from one continuous utterance.
+- **FR-042**: Transcript parsing MUST recognize conjunction separators (for example "וגם" and standalone
+  connector "ו") to support adding multiple items from one continuous utterance.
 - **FR-043**: Transcript parsing MUST robustly handle common separator forms (for example commas,
-  semicolons, "וגם", "ואז") for multi-item separation in continuous dictation.
+  semicolons, "וגם", "ואז", and prefixed conjunction+quantity tokens such as "ושלוש") for
+  multi-item separation in continuous dictation.
 - **FR-044**: Android build MUST include automated unit tests validating multi-item transcript
-  separation behavior (including "וגם", prefixed conjunction forms like "ולחם", and punctuation separators).
+  separation behavior (including "וגם", standalone "ו", prefixed conjunction forms like "ולחם",
+  prefixed conjunction+quantity forms like "ושלוש", and punctuation separators).
 - **FR-045**: List screen MUST provide a one-press clear-list action that removes all current items.
 
 ### Non-functional Requirements

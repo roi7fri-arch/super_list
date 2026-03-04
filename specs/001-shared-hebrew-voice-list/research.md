@@ -129,3 +129,17 @@
 ## Clarification Resolution Status
 
 All technical context unknowns for MVP planning are resolved from approved defaults and research. No open NEEDS CLARIFICATION items remain.
+
+---
+
+## Regression Log
+
+### 2026-03-04 — Multi-item separation with prefixed conjunction+quantity token
+
+- **Reported symptom**: Utterance `שני לחם וגבינה אחת ושלוש מוצרלה` produced `לחם ×2`, but merged the remaining words into one item instead of two separate items.
+- **Root cause**: In Android transcript splitting (`parseTranscriptItems`), prefixed connector tokens such as `ושלוש` were not consistently treated as item-boundary starters when they should begin a new item phrase.
+- **Fix implemented**: Updated connector handling in `android/app/src/main/java/com/superlist/SuperListApp.kt` to split on prefixed `ו` tokens by default, while preserving numeric-continuation behavior for number compounds (for example `עשרים ושלוש`).
+- **Regression prevention tests**:
+	- Unit: `separates_items_with_prefixed_vav_and_following_quantity_phrase()` in `android/app/src/test/java/com/superlist/TranscriptSeparationTest.kt`.
+	- Connected device: `separates_prefixed_vav_with_quantity_phrase_on_connected_device()` in `android/app/src/androidTest/java/com/superlist/realdevice/TranscriptSeparationConnectedTest.kt`.
+- **Validation evidence**: Android local + connected tests passed and updated debug/release APKs were installed on the connected device.

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,6 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -51,6 +53,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import java.text.Normalizer
 
 @Composable
@@ -101,11 +105,18 @@ fun SuperListApp() {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 if (screen == "list") {
-                    Button(onClick = { screen = "voice" }, modifier = Modifier.height(36.dp)) {
-                        Text(
-                            text = "→",
-                            style = MaterialTheme.typography.headlineMedium,
-                        )
+                    Button(
+                        onClick = { screen = "voice" },
+                        modifier = Modifier.width(64.dp).height(44.dp),
+                        contentPadding = PaddingValues(0.dp),
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Filled.KeyboardArrowRight,
+                                contentDescription = "מעבר למסך קולי",
+                                modifier = Modifier.size(30.dp),
+                            )
+                        }
                     }
                 } else {
                     Spacer(modifier = Modifier.width(64.dp))
@@ -692,7 +703,7 @@ internal fun parseTranscriptItems(transcript: String): List<ParsedVoiceItem> {
         .map { it.trim() }
         .filter { it.isNotBlank() }
 
-    val listSeparatorWords = setOf("וגם", "גם", "ואז", "ואחר", "אחר", "אחרכך", "ולאחר")
+    val listSeparatorWords = setOf("ו", "וגם", "גם", "ואז", "ואחר", "אחר", "אחרכך", "ולאחר")
     val parsedItems = mutableListOf<ParsedVoiceItem>()
 
     hardParts.forEach { part ->
@@ -720,13 +731,19 @@ internal fun parseTranscriptItems(transcript: String): List<ParsedVoiceItem> {
                 return@tokenLoop
             }
 
-            val startsWithVavConnector =
-                token.startsWith("ו") && token.length > 2 && segmentTokens.isNotEmpty() && !isHebrewNumberToken(token)
+            val startsWithVavConnector = token.startsWith("ו") && token.length > 1 && segmentTokens.isNotEmpty()
 
             if (startsWithVavConnector) {
-                flushSegment()
                 val withoutVav = token.drop(1).trim()
-                if (withoutVav.isNotBlank()) {
+                val numberContinuation =
+                    withoutVav.isNotBlank() &&
+                        isHebrewNumberToken(withoutVav) &&
+                        segmentTokens.all { existing -> isHebrewNumberToken(existing) }
+
+                if (numberContinuation) {
+                    segmentTokens += token
+                } else if (withoutVav.isNotBlank()) {
+                    flushSegment()
                     segmentTokens += withoutVav
                 }
             } else {
