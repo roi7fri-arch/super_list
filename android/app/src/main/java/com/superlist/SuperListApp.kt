@@ -731,6 +731,7 @@ private fun CouponTab(
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+    val couponSectionState = remember(coupons) { buildCouponSectionState(coupons) }
     var statusText by remember { mutableStateOf("העלה תמונת קופון כדי לחלץ מספר בן 9 ספרות ומעלה") }
     var isProcessingImage by remember { mutableStateOf(false) }
     var pendingCouponNumber by remember { mutableStateOf("") }
@@ -797,7 +798,7 @@ private fun CouponTab(
                     "שמור מספרי קופון, פתח את אתר היתרה, והצג את המספר בקופה בזמן אמת",
                     textAlign = TextAlign.Center,
                 )
-                coupons.firstOrNull()?.let { featuredCoupon ->
+                couponSectionState.featuredCoupon?.let { featuredCoupon ->
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("מספר הקופון שלך", style = MaterialTheme.typography.titleMedium)
                     Text(
@@ -850,7 +851,7 @@ private fun CouponTab(
             }
         }
 
-        if (coupons.isEmpty()) {
+        if (couponSectionState.actionCoupons.isEmpty()) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBF0)),
@@ -860,7 +861,7 @@ private fun CouponTab(
                 }
             }
         } else {
-            coupons.forEach { coupon ->
+            couponSectionState.actionCoupons.forEach { coupon ->
                 val balanceUrl = buildCouponBalanceLookupUrl(balanceUrlTemplate, coupon.number)
 
                 Card(
@@ -1151,12 +1152,17 @@ private data class GroceryItem(
     val quantity: Int,
 )
 
-private data class CouponRecord(
+internal data class CouponRecord(
     val id: String,
     val number: String,
     val remainingBalance: String? = null,
     val balanceLastCheckedAt: String? = null,
     val lastImportedAt: String? = null,
+)
+
+internal data class CouponSectionState(
+    val featuredCoupon: CouponRecord?,
+    val actionCoupons: List<CouponRecord>,
 )
 
 private const val SUPER_LIST_PREFS_NAME = "super_list_prefs"
@@ -1296,6 +1302,13 @@ private fun buildCouponBalanceLookupUrl(template: String, couponNumber: String):
     } else {
         trimmedTemplate
     }
+}
+
+internal fun buildCouponSectionState(coupons: List<CouponRecord>): CouponSectionState {
+    return CouponSectionState(
+        featuredCoupon = coupons.firstOrNull(),
+        actionCoupons = coupons,
+    )
 }
 
 private fun mergeCouponCollections(localCoupons: List<CouponRecord>, serverCoupons: List<CouponRecord>): List<CouponRecord> {
