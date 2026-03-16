@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,10 +35,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,15 +56,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -75,12 +78,19 @@ fun SuperListApp() {
     val prefs = remember(context) {
         context.getSharedPreferences(SUPER_LIST_PREFS_NAME, Context.MODE_PRIVATE)
     }
+    val storedHouseholdCode = remember(prefs) { loadHouseholdCode(prefs) }
+    val storedSyncConnected = remember(prefs) { loadSyncConnected(prefs) }
+    val storedFamilyMembers = remember(prefs) { loadFamilyMembers(prefs) }
 
     var screen by remember { mutableStateOf("voice") }
-    var householdCode by remember { mutableStateOf(generateHouseholdCode()) }
-    var familyMembers by remember { mutableStateOf(1) }
-    var syncConnected by remember { mutableStateOf(false) }
-    var syncStatus by remember { mutableStateOf("לא מחובר למשפחה") }
+    var householdCode by remember { mutableStateOf(storedHouseholdCode) }
+    var familyMembers by remember { mutableStateOf(storedFamilyMembers) }
+    var syncConnected by remember { mutableStateOf(storedSyncConnected) }
+    var syncStatus by remember {
+        mutableStateOf(
+            if (storedSyncConnected) "מחובר למשפחה בקוד: $storedHouseholdCode" else "לא מחובר למשפחה",
+        )
+    }
     val items = remember(prefs) {
         mutableStateListOf<GroceryItem>().apply {
             addAll(loadPersistedItems(prefs))
@@ -90,6 +100,18 @@ fun SuperListApp() {
 
     LaunchedEffect(items.toList()) {
         persistItems(prefs, items)
+    }
+
+    LaunchedEffect(householdCode) {
+        saveHouseholdCode(prefs, householdCode)
+    }
+
+    LaunchedEffect(syncConnected) {
+        saveSyncConnected(prefs, syncConnected)
+    }
+
+    LaunchedEffect(familyMembers) {
+        saveFamilyMembers(prefs, familyMembers)
     }
 
     fun replaceItemsFromServer(serverItems: List<GroceryItem>) {
@@ -102,14 +124,14 @@ fun SuperListApp() {
 
         scope.launch {
             val ok = HouseholdSyncApi.pushAddOrMerge(
-                baseUrl = SYNC_SERVER_URL,
+                baseUrl = BuildConfig.SYNC_SERVER_URL,
                 householdId = householdCode,
                 itemName = parsed.name,
                 quantity = parsed.quantity,
             )
 
             if (ok) {
-                val latest = HouseholdSyncApi.fetchList(SYNC_SERVER_URL, householdCode)
+                val latest = HouseholdSyncApi.fetchList(BuildConfig.SYNC_SERVER_URL, householdCode)
                 if (latest != null) {
                     replaceItemsFromServer(latest)
                     syncStatus = "מסונכרן למשפחה"
@@ -127,7 +149,7 @@ fun SuperListApp() {
             var allOk = true
             removedItems.forEach { item ->
                 val ok = HouseholdSyncApi.pushRemove(
-                    baseUrl = SYNC_SERVER_URL,
+                    baseUrl = BuildConfig.SYNC_SERVER_URL,
                     householdId = householdCode,
                     itemName = item.name,
                 )
@@ -136,7 +158,7 @@ fun SuperListApp() {
                 }
             }
 
-            val latest = HouseholdSyncApi.fetchList(SYNC_SERVER_URL, householdCode)
+            val latest = HouseholdSyncApi.fetchList(BuildConfig.SYNC_SERVER_URL, householdCode)
             if (latest != null) {
                 replaceItemsFromServer(latest)
             }
@@ -150,7 +172,7 @@ fun SuperListApp() {
         }
 
         while (syncConnected) {
-            val latest = HouseholdSyncApi.fetchList(SYNC_SERVER_URL, householdCode)
+            val latest = HouseholdSyncApi.fetchList(BuildConfig.SYNC_SERVER_URL, householdCode)
             if (latest != null) {
                 replaceItemsFromServer(latest)
             }
@@ -177,14 +199,6 @@ fun SuperListApp() {
         }
     }
 
-    val addFromTranscript: (String) -> Unit = add@{ transcript ->
-        val parsed = parseHebrewTranscript(transcript)
-        if (parsed.name.isBlank()) {
-            return@add
-        }
-        addParsedItem(parsed)
-    }
-
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Row(
@@ -192,7 +206,7 @@ fun SuperListApp() {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                if (screen == "list") {
+                if (screen == "settings") {
                     Button(
                         onClick = { screen = "voice" },
                         modifier = Modifier.width(64.dp).height(44.dp),
@@ -200,7 +214,7 @@ fun SuperListApp() {
                     ) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.Filled.KeyboardArrowRight,
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                 contentDescription = "מעבר למסך קולי",
                                 modifier = Modifier.size(30.dp),
                             )
@@ -217,8 +231,11 @@ fun SuperListApp() {
                 )
 
                 if (screen == "voice") {
-                    Button(onClick = { screen = "list" }, modifier = Modifier.height(36.dp)) {
-                        Text("📝")
+                    Button(onClick = { screen = "settings" }, modifier = Modifier.height(36.dp)) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "מעבר להגדרות",
+                        )
                     }
                 } else {
                     Spacer(modifier = Modifier.width(64.dp))
@@ -229,23 +246,8 @@ fun SuperListApp() {
 
             when (screen) {
                 "voice" -> VoiceTab(
-                    onAdd = addFromTranscript,
                     onAddParsed = addParsedItem,
-                )
-
-                else -> ListTab(
                     items = items,
-                    householdCode = householdCode,
-                    familyMembers = familyMembers,
-                    syncStatus = syncStatus,
-                    onJoinHousehold = { enteredCode ->
-                        if (enteredCode.isNotBlank()) {
-                            householdCode = enteredCode.trim().uppercase()
-                            syncConnected = true
-                            familyMembers = maxOf(familyMembers, 2)
-                            syncStatus = "מחובר למשפחה בקוד: $householdCode"
-                        }
-                    },
                     onRemoveSelected = { selected ->
                         val removedSnapshot = selected
                             .sorted()
@@ -268,25 +270,41 @@ fun SuperListApp() {
                         }
                     },
                 )
+
+                else -> SettingsTab(
+                    householdCode = householdCode,
+                    familyMembers = familyMembers,
+                    syncStatus = syncStatus,
+                    onJoinHousehold = { enteredCode ->
+                        if (enteredCode.isNotBlank()) {
+                            householdCode = enteredCode.trim().uppercase()
+                            syncConnected = true
+                            familyMembers = maxOf(familyMembers, 2)
+                            syncStatus = "מחובר למשפחה בקוד: $householdCode"
+                        }
+                    },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun VoiceTab(onAdd: (String) -> Unit, onAddParsed: (ParsedVoiceItem) -> Unit) {
+private fun VoiceTab(
+    onAddParsed: (ParsedVoiceItem) -> Unit,
+    items: List<GroceryItem>,
+    onRemoveSelected: (List<Int>) -> Unit,
+    onClearAll: () -> Unit,
+) {
     val context = LocalContext.current
-    var draft by remember { mutableStateOf("") }
     var statusText by remember { mutableStateOf("לחץ על הכפתור האדום להתחלה/עצירה של מצב רציף") }
     var isHolding by remember { mutableStateOf(false) }
     var isRecognizing by remember { mutableStateOf(false) }
     var pendingPermissionStart by remember { mutableStateOf(false) }
     var continuousListening by remember { mutableStateOf(false) }
     var commitPendingBatchOnNextResult by remember { mutableStateOf(false) }
-    var pendingTranscript by remember { mutableStateOf<String?>(null) }
-    var pendingParsedName by remember { mutableStateOf("") }
-    var pendingParsedQuantity by remember { mutableStateOf(1) }
     val pendingBatch = remember { mutableStateListOf<ParsedVoiceItem>() }
+    val scrollState = rememberScrollState()
     val thresholdMs = 300L
     val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80) }
 
@@ -382,9 +400,7 @@ private fun VoiceTab(onAdd: (String) -> Unit, onAddParsed: (ParsedVoiceItem) -> 
 
                     if (spoken.isNotBlank()) {
                         val parsedItems = parseTranscriptItems(spoken)
-                        draft = spoken
                         if (parsedItems.isEmpty()) {
-                            pendingTranscript = null
                             statusText = "לא זוהה פריט ברור, נסה שוב"
                         } else {
                             if (continuousListening || commitPendingBatchOnNextResult) {
@@ -401,10 +417,8 @@ private fun VoiceTab(onAdd: (String) -> Unit, onAddParsed: (ParsedVoiceItem) -> 
                                 }
                             } else {
                                 val parsed = parsedItems.first()
-                                pendingTranscript = spoken
-                                pendingParsedName = parsed.name
-                                pendingParsedQuantity = parsed.quantity
-                                statusText = "פוענח פריט — אשר הוספה"
+                                onAddParsed(parsed)
+                                statusText = "נוסף: ${parsed.name} ×${parsed.quantity}"
                             }
                         }
                     } else {
@@ -428,9 +442,14 @@ private fun VoiceTab(onAdd: (String) -> Unit, onAddParsed: (ParsedVoiceItem) -> 
         }
     }
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(scrollState),
+    ) {
         Text("דיבור רציף בזמן לחיצה")
-        Spacer(modifier = Modifier.height(72.dp))
+        Spacer(modifier = Modifier.height(18.dp))
         Box(
             modifier = Modifier
                 .size(196.dp)
@@ -525,119 +544,26 @@ private fun VoiceTab(onAdd: (String) -> Unit, onAddParsed: (ParsedVoiceItem) -> 
             }
         }
 
-        if (pendingTranscript != null) {
-            Spacer(modifier = Modifier.height(10.dp))
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                    Text(
-                        text = "תצוגה לפני הוספה",
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text("פריט: $pendingParsedName")
-                    Text("כמות: $pendingParsedQuantity")
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Button(
-                            onClick = {
-                                val transcript = pendingTranscript
-                                if (!transcript.isNullOrBlank()) {
-                                    onAdd(transcript)
-                                    statusText = "נוסף: $pendingParsedName ×$pendingParsedQuantity"
-                                }
-                                pendingTranscript = null
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("אשר")
-                        }
-                        Button(
-                            onClick = {
-                                pendingTranscript = null
-                                statusText = "בוטל — נסה שוב"
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("בטל")
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            Button(onClick = {
-                val item = if (draft.isBlank()) "פריט לדוגמה" else draft.trim()
-                onAdd(item)
-                pendingTranscript = null
-                statusText = "נוסף ידנית: $item"
-            }, modifier = Modifier.fillMaxWidth()) {
-                Text("הוסף ידנית")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
-            value = draft,
-            onValueChange = { draft = it },
-            label = { Text("פריט להוספה") },
-            modifier = Modifier.fillMaxWidth(),
+        Spacer(modifier = Modifier.height(18.dp))
+        YellowListSection(
+            items = items,
+            onRemoveSelected = onRemoveSelected,
+            onClearAll = onClearAll,
         )
     }
 }
 
 @Composable
-private fun ListTab(
-    items: List<GroceryItem>,
+private fun SettingsTab(
     householdCode: String,
     familyMembers: Int,
     syncStatus: String,
     onJoinHousehold: (String) -> Unit,
-    onRemoveSelected: (List<Int>) -> Unit,
-    onClearAll: () -> Unit,
 ) {
-    val selected = remember { mutableStateListOf<Int>() }
-    val scrollState = rememberScrollState()
     var joinCode by remember { mutableStateOf("") }
 
-    fun toggleSelection(index: Int) {
-        if (selected.contains(index)) {
-            selected.remove(index)
-        } else {
-            selected.add(index)
-        }
-    }
-
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("רשימת סופר משותפת", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("נבחרו: ${selected.size}", modifier = Modifier.align(Alignment.CenterVertically))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        onRemoveSelected(selected.toList())
-                        selected.clear()
-                    },
-                    enabled = selected.isNotEmpty() && items.isNotEmpty(),
-                ) {
-                    Text("אשר מחיקה")
-                }
-                Button(
-                    onClick = {
-                        onClearAll()
-                        selected.clear()
-                    },
-                    enabled = items.isNotEmpty(),
-                ) {
-                    Text("נקה רשימה")
-                }
-            }
-        }
+        Text("הגדרות משפחה וסנכרון", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -660,39 +586,74 @@ private fun ListTab(
                 }
             }
         }
+    }
+}
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            val lineColor = Color(0xFF9BB7D4)
-            val noteColor = Color(0xFFFFF59D)
-            val marginLineColor = Color(0xFFD46A6A)
+@Composable
+private fun YellowListSection(
+    items: List<GroceryItem>,
+    onRemoveSelected: (List<Int>) -> Unit,
+    onClearAll: () -> Unit,
+) {
+    val selected = remember { mutableStateListOf<Int>() }
+    val scrollState = rememberScrollState()
 
+    fun toggleSelection(index: Int) {
+        if (selected.contains(index)) {
+            selected.remove(index)
+        } else {
+            selected.add(index)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("הרשימה המשפחתית", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+
+        Text("נבחרו: ${selected.size}", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    onClearAll()
+                    selected.clear()
+                },
+                enabled = items.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFB71C1C),
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFFE0B4B4),
+                    disabledContentColor = Color(0xFF6D4C41),
+                ),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("נקה רשימה")
+            }
+            OutlinedButton(
+                onClick = {
+                    onRemoveSelected(selected.toList())
+                    selected.clear()
+                },
+                enabled = selected.isNotEmpty() && items.isNotEmpty(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color(0xFF6D4C41),
+                    disabledContentColor = Color(0xFFBCAAA4),
+                ),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("אשר מחיקה")
+            }
+        }
+
+        val noteColor = Color(0xFFFFF59D)
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = noteColor),
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(360.dp)
-                    .drawBehind {
-                        drawRect(color = noteColor)
-
-                        val lineGap = 36.dp.toPx()
-                        val startY = 28.dp.toPx()
-                        var y = startY
-                        while (y < size.height) {
-                            drawLine(
-                                color = lineColor,
-                                start = Offset(0f, y),
-                                end = Offset(size.width, y),
-                                strokeWidth = 2f,
-                            )
-                            y += lineGap
-                        }
-
-                        drawLine(
-                            color = marginLineColor,
-                            start = Offset(28.dp.toPx(), 0f),
-                            end = Offset(28.dp.toPx(), size.height),
-                            strokeWidth = 2f,
-                        )
-                    }
+                    .heightIn(min = 240.dp, max = 420.dp)
                     .padding(horizontal = 36.dp, vertical = 16.dp)
                     .verticalScroll(scrollState)
             ) {
@@ -750,14 +711,6 @@ private fun ListTab(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .background(Color(0xFFE6E6A8)),
-        )
     }
 }
 
@@ -768,7 +721,9 @@ private data class GroceryItem(
 
 private const val SUPER_LIST_PREFS_NAME = "super_list_prefs"
 private const val SUPER_LIST_ITEMS_KEY = "persisted_items"
-private const val SYNC_SERVER_URL = "https://list.friedman-makers.com"
+private const val SUPER_LIST_HOUSEHOLD_CODE_KEY = "household_code"
+private const val SUPER_LIST_SYNC_CONNECTED_KEY = "sync_connected"
+private const val SUPER_LIST_FAMILY_MEMBERS_KEY = "family_members"
 
 private fun loadPersistedItems(prefs: SharedPreferences): List<GroceryItem> {
     val raw = prefs.getString(SUPER_LIST_ITEMS_KEY, null) ?: return emptyList()
@@ -798,6 +753,37 @@ private fun persistItems(prefs: SharedPreferences, items: List<GroceryItem>) {
     }
 
     prefs.edit().putString(SUPER_LIST_ITEMS_KEY, array.toString()).apply()
+}
+
+private fun loadHouseholdCode(prefs: SharedPreferences): String {
+    val saved = prefs.getString(SUPER_LIST_HOUSEHOLD_CODE_KEY, null)?.trim().orEmpty()
+    if (saved.isNotBlank()) {
+        return saved
+    }
+
+    val generated = generateHouseholdCode()
+    prefs.edit().putString(SUPER_LIST_HOUSEHOLD_CODE_KEY, generated).apply()
+    return generated
+}
+
+private fun saveHouseholdCode(prefs: SharedPreferences, code: String) {
+    prefs.edit().putString(SUPER_LIST_HOUSEHOLD_CODE_KEY, code.trim()).apply()
+}
+
+private fun loadSyncConnected(prefs: SharedPreferences): Boolean {
+    return prefs.getBoolean(SUPER_LIST_SYNC_CONNECTED_KEY, true)
+}
+
+private fun saveSyncConnected(prefs: SharedPreferences, value: Boolean) {
+    prefs.edit().putBoolean(SUPER_LIST_SYNC_CONNECTED_KEY, value).apply()
+}
+
+private fun loadFamilyMembers(prefs: SharedPreferences): Int {
+    return prefs.getInt(SUPER_LIST_FAMILY_MEMBERS_KEY, 1).coerceAtLeast(1)
+}
+
+private fun saveFamilyMembers(prefs: SharedPreferences, value: Int) {
+    prefs.edit().putInt(SUPER_LIST_FAMILY_MEMBERS_KEY, value.coerceAtLeast(1)).apply()
 }
 
 private object HouseholdSyncApi {

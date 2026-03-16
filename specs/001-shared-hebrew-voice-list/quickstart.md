@@ -27,8 +27,12 @@ Validate MVP core flows and gate evidence for:
    - `./scripts/sync/start-sync-stack.sh`
 3. Ensure server route is active:
    - server binds to `0.0.0.0:8789`
-   - Cloudflare Tunnel public hostname: `https://list.friedman-makers.com`
-4. Android sync URL is hard-coded to `https://list.friedman-makers.com` (no per-device URL input required).
+   - Debug hostname: `https://dev-list.friedman-makers.com`
+   - Release hostname: `https://list.friedman-makers.com`
+4. Android sync URL is hard-coded by build type:
+   - Debug APK -> `https://dev-list.friedman-makers.com`
+   - Release APK -> `https://list.friedman-makers.com`
+   - (no per-device URL input required)
 5. Use same household code on all family devices.
 6. Keep this PC online while syncing (API + tunnel run on this host).
 

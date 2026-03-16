@@ -229,6 +229,8 @@
 - [x] T134 [P] Set Android default sync URL to public Cloudflare hostname in android/app/src/main/java/com/superlist/SuperListApp.kt
 - [x] T135 [P] Add one-command sync stack launcher script for API+tunnel in scripts/sync/start-sync-stack.sh
 - [x] T136 [P] Remove editable sync URL field and keep Cloudflare sync endpoint hard-coded in android/app/src/main/java/com/superlist/SuperListApp.kt
+- [x] T137 [P] Configure Android build-type sync URLs (debug->dev-list, release->list) in android/app/build.gradle.kts and SuperListApp.kt
+- [x] T138 [P] Configure Cloudflare DNS+tunnel ingress for dev-list.friedman-makers.com to local API
 
 ---
 

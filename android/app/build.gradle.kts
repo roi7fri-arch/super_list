@@ -18,8 +18,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "SYNC_SERVER_URL", "\"https://dev-list.friedman-makers.com\"")
+        }
+
         release {
             isMinifyEnabled = false
+            buildConfigField("String", "SYNC_SERVER_URL", "\"https://list.friedman-makers.com\"")
             signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -37,6 +42,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 
@@ -50,6 +56,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.compose.ui:ui:1.6.8")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.8")
+    implementation("androidx.compose.material:material-icons-extended:1.6.8")
     implementation("androidx.compose.material3:material3:1.2.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.8")

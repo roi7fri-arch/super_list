@@ -3,7 +3,9 @@
 ## Purpose
 Run the local Super List shared-sync stack:
 - Local API server on port `8789`
-- Cloudflare Tunnel route for `https://list.friedman-makers.com`
+- Cloudflare Tunnel routes for:
+  - Debug builds: `https://dev-list.friedman-makers.com`
+  - Release builds: `https://list.friedman-makers.com`
 
 ## Scripts
 
@@ -31,4 +33,5 @@ Terminal B:
 - `./scripts/sync/start-cloudflared-tunnel.sh`
 
 Then set Android app sync URL to:
-- `https://list.friedman-makers.com`
+- Debug APK: `https://dev-list.friedman-makers.com` (from BuildConfig)
+- Release APK: `https://list.friedman-makers.com` (from BuildConfig)
