@@ -126,6 +126,18 @@
 
 ---
 
+## Decision 11: Coupon OCR and balance support
+
+**Decision**: Use on-device OCR for coupon image import, store only structured coupon metadata locally, and support a configurable balance-check URL template until a dedicated backend lookup/parser is available.
+
+**Rationale**: Coupon numbers are sensitive shopping credentials but do not require long-term image retention. On-device OCR avoids unnecessary uploads, while URL-template configuration keeps the balance flow flexible across supermarket website changes.
+
+**Alternatives considered**:
+- Hard-coded supermarket parsing directly in the app: rejected as fragile and difficult to maintain.
+- Persisting raw coupon images indefinitely: rejected because structured coupon number and balance metadata are sufficient for MVP.
+
+---
+
 ## Clarification Resolution Status
 
 All technical context unknowns for MVP planning are resolved from approved defaults and research. No open NEEDS CLARIFICATION items remain.
@@ -164,3 +176,15 @@ All technical context unknowns for MVP planning are resolved from approved defau
 	- Android default sync URL switched to `https://list.friedman-makers.com`.
 	- Runtime helper scripts added under `scripts/sync/`, including one-command stack startup (`start-sync-stack.sh`).
 - **Constraint**: Because API runs on local PC, PC and tunnel process must remain online for continuous family sync.
+
+### 2026-03-16 — One-device sync validation required debug fallback paths
+
+- **Reported symptom**: During one-phone sync validation, the Android debug build did not pull remote coupon/list updates even though the local API and Cloudflare tunnel were healthy.
+- **Root cause**:
+	- The phone was joined to household `SL-890248`, while initial manual API tests used `890248` without the app prefix.
+	- On the tested phone, DNS lookups for `dev-list.friedman-makers.com` failed intermittently in the app process, preventing the normal debug sync endpoint from resolving.
+	- `adb reverse` was present but localhost connectivity from the app sandbox to `127.0.0.1:8789` was not reliable on that device.
+- **Fix implemented**:
+	- Added Android debug sync fallback attempts in `android/app/src/main/java/com/superlist/SuperListApp.kt` for `http://127.0.0.1:8789` and the validated workstation LAN address.
+	- Validated coupon sync both directions with coupon `11447830316028` and list sync both directions with items `בננות ×3` and `חלב ×5`.
+- **Operational note**: For future one-device validations, always copy the exact in-app household code and prefer direct LAN fallback if the public debug hostname does not resolve on-device.

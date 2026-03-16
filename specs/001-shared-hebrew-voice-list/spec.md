@@ -49,6 +49,10 @@ all family members who installed the app and joined the same household."
 10. Activity log of updates with timestamp ordering behavior.
 11. Launcher icon uses a supermarket stroller visual to match grocery-use context.
 12. Shared list screen presents items on a yellow lined notes-style surface for quick scanning.
+13. Users can import a supermarket coupon image from device gallery and extract a coupon number of 9 digits or more.
+14. Imported coupon number is stored locally, masked by default, and can be revealed on demand at checkout.
+15. App supports storing remaining coupon balance and last-checked timestamp for quick in-store reference.
+16. App supports a configurable balance-check URL template using `{coupon}` placeholder until automated balance parsing is wired.
 
 ### Out of Scope (Explicit Non-goals)
 
@@ -160,6 +164,39 @@ the list and the second device receives the update within defined sync SLA.
    **Then** queued actions replay idempotently,
    and all online household devices converge to the same final list state.
 
+---
+
+### User Story 5 - Import and View Supermarket Coupons (Priority: P2)
+
+As a household shopper, I want to import a coupon image, extract and save its long coupon number,
+and track the remaining balance so I can redeem the discount quickly at the supermarket.
+
+**Why this priority**: Coupon redemption is a recurring real-world companion task to grocery shopping,
+and users need the number and remaining value available quickly without leaving the app.
+
+**Independent Test**: Can be tested by importing a coupon image from gallery, confirming an extracted 9+ digit number,
+saving it, seeing the full coupon number immediately on the coupon screen, updating/displaying remaining balance,
+and confirming the same coupon data appears for another family member in the same household.
+
+**Acceptance Scenarios**:
+
+1. **Given** the user has a coupon image in the phone gallery,
+   **When** the user imports it from the coupon screen,
+   **Then** the app extracts candidate digit sequences,
+   proposes a coupon number with at least 9 digits,
+   and lets the user confirm/edit before saving.
+2. **Given** the user saved one or more coupons,
+   **When** the user opens the coupon management screen,
+  **Then** the latest coupon number is shown prominently in the upper summary section,
+  while the lower coupon cards keep balance/update actions without repeating the number.
+3. **Given** a balance-check URL template is configured with `{coupon}` placeholder,
+   **When** the user requests balance lookup for a saved coupon,
+   **Then** the app can open the corresponding balance-check page for that coupon number,
+   and lets the user store the resulting remaining balance locally.
+4. **Given** two family members are connected to the same household,
+  **When** one member saves a coupon or updates its remaining balance,
+  **Then** the same coupon number and balance are synchronized to the other member's coupon screen.
+
 ## Detailed Acceptance Scenarios (Given/When/Then)
 
 1. **Given** a user has not granted microphone permission,
@@ -222,6 +259,21 @@ the list and the second device receives the update within defined sync SLA.
 16. **Given** the shared list contains items,
     **When** the user presses the clear-list action once,
     **Then** all list items are removed immediately in a single action.
+17. **Given** the imported coupon image contains more than one 9+ digit sequence,
+    **When** OCR completes,
+    **Then** the app MUST let the user review/edit the proposed coupon number before saving.
+18. **Given** OCR cannot find a clear coupon number,
+    **When** the user finishes image import,
+    **Then** the app shows a Hebrew error state and does not save an incomplete coupon.
+19. **Given** the user saved a coupon,
+    **When** the coupon card is shown,
+    **Then** the full coupon number is immediately visible for quick checkout use.
+20. **Given** a user has checked a coupon balance externally,
+    **When** the user enters the remaining amount into the app,
+    **Then** the coupon card shows the stored balance and the last-updated timestamp.
+21. **Given** a household is connected on more than one device,
+    **When** coupon data changes on one device,
+    **Then** coupon number and remaining balance converge across household devices.
 
 ## Edge Case Catalog
 
@@ -239,6 +291,10 @@ the list and the second device receives the update within defined sync SLA.
 - **Accidental tap (<300ms)**: Ignore capture and keep prior list unchanged.
 - **Permission revoked mid-lifecycle**: Block voice capture immediately and provide Hebrew guidance.
 - **Long grocery lists**: Notes-style list remains readable with item-per-line layout and no text clipping.
+- **Coupon OCR returns multiple long candidates**: User must be able to edit/confirm before saving.
+- **Coupon OCR fails on blurred image**: Show Hebrew retry guidance and keep prior coupon state unchanged.
+- **Balance site URL template missing or invalid**: Coupon remains usable locally; app disables external balance-lookup action.
+- **Coupon already exists on another household device**: Household sync merges by coupon number and preserves the latest known balance timestamp.
 
 ## Requirements *(mandatory)*
 
@@ -308,6 +364,14 @@ the list and the second device receives the update within defined sync SLA.
   separation behavior (including "וגם", standalone "ו", prefixed conjunction forms like "ולחם",
   prefixed conjunction+quantity forms like "ושלוש", and punctuation separators).
 - **FR-045**: List screen MUST provide a one-press clear-list action that removes all current items.
+- **FR-046**: Android settings area MUST expose a dedicated coupon management surface separate from the main voice/list screen.
+- **FR-047**: Coupon management MUST support gallery image import and OCR extraction of coupon numbers with at least 9 digits.
+- **FR-048**: Coupon save flow MUST require explicit confirmation/edit opportunity before committing extracted number to storage.
+- **FR-049**: Saved coupons MUST display the full coupon number directly on the coupon screen for rapid in-store use.
+- **FR-050**: System MUST persist saved coupon numbers and user-entered remaining balance across app restarts.
+- **FR-051**: App MUST support a configurable balance-check URL template with `{coupon}` placeholder for coupon-specific lookup navigation.
+- **FR-052**: Coupon management MUST display remaining balance and last-checked timestamp when that information has been stored.
+- **FR-053**: Coupon numbers and stored balances MUST synchronize across members of the same household.
 
 ### Non-functional Requirements
 
@@ -347,6 +411,7 @@ the list and the second device receives the update within defined sync SLA.
   (`127.0.0.1:8789`) on the host machine.
 - **NFR-021**: For continuous household sync, host machine runtime processes (local API + tunnel)
   MUST remain online.
+- **NFR-022**: Coupon image processing SHOULD minimize retained data; structured coupon metadata is preferred over storing raw coupon images long-term.
 
 ## Data and Compliance Constraints
 
@@ -357,6 +422,8 @@ the list and the second device receives the update within defined sync SLA.
 4. Household sharing data access is limited to authenticated users in the same household.
 5. No third-party data sale is permitted.
 6. No unapproved data sharing is permitted.
+7. Coupon image import is allowed only for extracting user-owned coupon metadata needed for discount redemption.
+8. Raw coupon images should not be retained after OCR when structured coupon metadata is sufficient.
 
 ## Roles and Permissions Matrix
 
@@ -406,6 +473,8 @@ the list and the second device receives the update within defined sync SLA.
 - **SC-013**: Automated tests MUST pass for the regression phrase "שני חלב וגם לחם" and verify
   correct split into two items with quantities (2,1) instead of one merged text item.
 - **SC-014**: Clear-list action removes all visible list items in one press and leaves the list in empty state.
+- **SC-015**: Coupon import successfully extracts or allows confirmation of a 9+ digit coupon number from representative gallery images during Android device validation.
+- **SC-016**: Saved coupon cards display masked number by default and preserve locally stored balance metadata across app restart.
 
 ## Assumptions + Dependencies
 

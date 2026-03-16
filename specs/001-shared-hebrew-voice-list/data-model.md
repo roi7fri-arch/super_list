@@ -91,6 +91,28 @@ The model is event-backed with a current-state projection for fast list renderin
   - FIFO replay by `enqueued_at` for MVP.
   - Remove action must reference item identity in payload.
 
+### 6) CouponWalletEntry (Household Shared Snapshot + Client Cache)
+- **Purpose**: Persist household-visible supermarket coupons for fast reuse at checkout across family members.
+- **Fields**:
+  - `local_id` (string, PK)
+  - `household_id` (string)
+  - `coupon_number` (string, 9+ digits)
+  - `remaining_balance` (string, nullable)
+  - `balance_last_checked_at` (timestamp, nullable)
+  - `last_imported_at` (timestamp)
+- **Validation**:
+  - `coupon_number` must contain at least 9 digits after normalization.
+  - Coupon number is visible in the coupon screen UI for quick checkout use.
+  - Raw coupon image is not required after OCR succeeds.
+
+### 7) CouponBalanceLookupConfig (Client Local)
+- **Purpose**: Store user-configured URL template for opening supermarket balance lookup page.
+- **Fields**:
+  - `url_template` (string, nullable)
+- **Validation**:
+  - Template should contain `{coupon}` placeholder.
+  - Invalid or missing template disables the lookup-launch action but does not block coupon storage.
+
 ## Relationships
 
 - Household `1 -> N` Membership
@@ -121,6 +143,13 @@ The model is event-backed with a current-state projection for fast list renderin
 3. Server idempotently acknowledges already-processed actions
 4. Client clears acked entries
 
+### Coupon Import
+1. User selects coupon image from gallery
+2. App runs OCR on-device and extracts candidate 9+ digit numbers
+3. User confirms/edits the detected number
+4. App stores structured coupon metadata locally and synchronizes it to the active household when connected
+5. Household members can later view the same coupon number and update remaining balance
+
 ## Conflict Resolution Rules
 
 - Primary order: `server_timestamp` ascending.
@@ -148,5 +177,6 @@ The model is event-backed with a current-state projection for fast list renderin
 ## Retention and Minimization
 
 - Persist structured events only (no raw audio).
+- Persist structured coupon metadata only when possible; avoid long-term raw coupon image retention unless future product requirements demand it.
 - Retain only minimum required fields for sync, audit, and troubleshooting.
 - Apply configured retention window to event logs consistent with policy.

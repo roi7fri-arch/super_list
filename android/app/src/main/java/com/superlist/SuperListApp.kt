@@ -1,6 +1,9 @@
 package com.superlist
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.net.Uri
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -34,6 +37,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -44,6 +48,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -56,19 +61,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Settings
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.Normalizer
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -81,11 +95,14 @@ fun SuperListApp() {
     val storedHouseholdCode = remember(prefs) { loadHouseholdCode(prefs) }
     val storedSyncConnected = remember(prefs) { loadSyncConnected(prefs) }
     val storedFamilyMembers = remember(prefs) { loadFamilyMembers(prefs) }
+    val storedCoupons = remember(prefs) { loadPersistedCoupons(prefs) }
+    val storedCouponBalanceUrlTemplate = remember(prefs) { loadCouponBalanceUrlTemplate(prefs) }
 
     var screen by remember { mutableStateOf("voice") }
     var householdCode by remember { mutableStateOf(storedHouseholdCode) }
     var familyMembers by remember { mutableStateOf(storedFamilyMembers) }
     var syncConnected by remember { mutableStateOf(storedSyncConnected) }
+    var couponBalanceUrlTemplate by remember { mutableStateOf(storedCouponBalanceUrlTemplate) }
     var syncStatus by remember {
         mutableStateOf(
             if (storedSyncConnected) "מחובר למשפחה בקוד: $storedHouseholdCode" else "לא מחובר למשפחה",
@@ -96,10 +113,19 @@ fun SuperListApp() {
             addAll(loadPersistedItems(prefs))
         }
     }
+    val coupons = remember(prefs) {
+        mutableStateListOf<CouponRecord>().apply {
+            addAll(storedCoupons)
+        }
+    }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(items.toList()) {
         persistItems(prefs, items)
+    }
+
+    LaunchedEffect(coupons.toList()) {
+        persistCoupons(prefs, coupons)
     }
 
     LaunchedEffect(householdCode) {
@@ -114,9 +140,18 @@ fun SuperListApp() {
         saveFamilyMembers(prefs, familyMembers)
     }
 
+    LaunchedEffect(couponBalanceUrlTemplate) {
+        saveCouponBalanceUrlTemplate(prefs, couponBalanceUrlTemplate)
+    }
+
     fun replaceItemsFromServer(serverItems: List<GroceryItem>) {
         items.clear()
         items.addAll(serverItems)
+    }
+
+    fun replaceCouponsFromServer(serverCoupons: List<CouponRecord>) {
+        coupons.clear()
+        coupons.addAll(serverCoupons)
     }
 
     fun pushAddOrMerge(parsed: ParsedVoiceItem) {
@@ -166,15 +201,52 @@ fun SuperListApp() {
         }
     }
 
+    fun pushCouponUpsert(coupon: CouponRecord) {
+        if (!syncConnected || householdCode.isBlank()) return
+
+        scope.launch {
+            val ok = HouseholdSyncApi.upsertCoupon(
+                baseUrl = BuildConfig.SYNC_SERVER_URL,
+                householdId = householdCode,
+                coupon = coupon,
+            )
+
+            val latest = HouseholdSyncApi.fetchCoupons(BuildConfig.SYNC_SERVER_URL, householdCode)
+            if (latest != null) {
+                replaceCouponsFromServer(mergeCouponCollections(coupons.toList(), latest))
+                syncStatus = if (ok) "קופונים מסונכרנים למשפחה" else "שגיאת סנכרון בקופונים"
+            } else if (!ok) {
+                syncStatus = "שגיאת סנכרון בקופונים"
+            }
+        }
+    }
+
     LaunchedEffect(syncConnected, householdCode) {
         if (!syncConnected || householdCode.isBlank()) {
             return@LaunchedEffect
+        }
+
+        val initialCoupons = HouseholdSyncApi.fetchCoupons(BuildConfig.SYNC_SERVER_URL, householdCode)
+        if (initialCoupons != null) {
+            val mergedCoupons = mergeCouponCollections(coupons.toList(), initialCoupons)
+            replaceCouponsFromServer(mergedCoupons)
+            mergedCoupons.forEach { coupon ->
+                HouseholdSyncApi.upsertCoupon(
+                    baseUrl = BuildConfig.SYNC_SERVER_URL,
+                    householdId = householdCode,
+                    coupon = coupon,
+                )
+            }
         }
 
         while (syncConnected) {
             val latest = HouseholdSyncApi.fetchList(BuildConfig.SYNC_SERVER_URL, householdCode)
             if (latest != null) {
                 replaceItemsFromServer(latest)
+            }
+            val latestCoupons = HouseholdSyncApi.fetchCoupons(BuildConfig.SYNC_SERVER_URL, householdCode)
+            if (latestCoupons != null) {
+                replaceCouponsFromServer(mergeCouponCollections(coupons.toList(), latestCoupons))
             }
             delay(1500)
         }
@@ -199,6 +271,49 @@ fun SuperListApp() {
         }
     }
 
+    fun addCoupon(number: String) {
+        val normalizedNumber = number.filter(Char::isDigit)
+        if (normalizedNumber.length < 9) {
+            return
+        }
+
+        val existingIndex = coupons.indexOfFirst { it.number == normalizedNumber }
+        val updated = CouponRecord(
+            id = coupons.getOrNull(existingIndex)?.id ?: "coupon-${System.currentTimeMillis()}",
+            number = normalizedNumber,
+            remainingBalance = coupons.getOrNull(existingIndex)?.remainingBalance,
+            balanceLastCheckedAt = coupons.getOrNull(existingIndex)?.balanceLastCheckedAt,
+            lastImportedAt = nowIsoString(),
+        )
+
+        if (existingIndex >= 0) {
+            coupons[existingIndex] = updated
+        } else {
+            coupons.add(0, updated)
+        }
+
+        if (syncConnected) {
+            syncStatus = "מסנכרן קופון למשפחה..."
+            pushCouponUpsert(updated)
+        }
+    }
+
+    fun updateCouponBalance(couponId: String, amountText: String) {
+        val index = coupons.indexOfFirst { it.id == couponId }
+        if (index < 0) return
+
+        val updated = coupons[index].copy(
+            remainingBalance = amountText.trim().ifBlank { null },
+            balanceLastCheckedAt = nowIsoString(),
+        )
+        coupons[index] = updated
+
+        if (syncConnected) {
+            syncStatus = "מסנכרן יתרת קופון למשפחה..."
+            pushCouponUpsert(updated)
+        }
+    }
+
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Row(
@@ -206,9 +321,11 @@ fun SuperListApp() {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                if (screen == "settings") {
+                if (screen != "voice") {
                     Button(
-                        onClick = { screen = "voice" },
+                        onClick = {
+                            screen = "voice"
+                        },
                         modifier = Modifier.width(64.dp).height(44.dp),
                         contentPadding = PaddingValues(0.dp),
                     ) {
@@ -231,14 +348,22 @@ fun SuperListApp() {
                 )
 
                 if (screen == "voice") {
-                    Button(onClick = { screen = "settings" }, modifier = Modifier.height(36.dp)) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = "מעבר להגדרות",
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { screen = "coupons" }, modifier = Modifier.height(36.dp)) {
+                            Icon(
+                                imageVector = Icons.Filled.LocalOffer,
+                                contentDescription = "מעבר לקופונים",
+                            )
+                        }
+                        Button(onClick = { screen = "settings" }, modifier = Modifier.height(36.dp)) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "מעבר להגדרות",
+                            )
+                        }
                     }
                 } else {
-                    Spacer(modifier = Modifier.width(64.dp))
+                    Spacer(modifier = Modifier.width(104.dp))
                 }
             }
 
@@ -269,6 +394,14 @@ fun SuperListApp() {
                             pushRemoveMany(removedSnapshot)
                         }
                     },
+                )
+
+                "coupons" -> CouponTab(
+                    coupons = coupons,
+                    balanceUrlTemplate = couponBalanceUrlTemplate,
+                    onBalanceUrlTemplateChange = { couponBalanceUrlTemplate = it },
+                    onAddCoupon = { number -> addCoupon(number) },
+                    onUpdateCouponBalance = { couponId, amount -> updateCouponBalance(couponId, amount) },
                 )
 
                 else -> SettingsTab(
@@ -304,7 +437,6 @@ private fun VoiceTab(
     var continuousListening by remember { mutableStateOf(false) }
     var commitPendingBatchOnNextResult by remember { mutableStateOf(false) }
     val pendingBatch = remember { mutableStateListOf<ParsedVoiceItem>() }
-    val scrollState = rememberScrollState()
     val thresholdMs = 300L
     val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80) }
 
@@ -445,8 +577,7 @@ private fun VoiceTab(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(scrollState),
+            .fillMaxSize(),
     ) {
         Text("דיבור רציף בזמן לחיצה")
         Spacer(modifier = Modifier.height(18.dp))
@@ -546,6 +677,7 @@ private fun VoiceTab(
 
         Spacer(modifier = Modifier.height(18.dp))
         YellowListSection(
+            modifier = Modifier.weight(1f),
             items = items,
             onRemoveSelected = onRemoveSelected,
             onClearAll = onClearAll,
@@ -590,7 +722,281 @@ private fun SettingsTab(
 }
 
 @Composable
+private fun CouponTab(
+    coupons: List<CouponRecord>,
+    balanceUrlTemplate: String,
+    onBalanceUrlTemplateChange: (String) -> Unit,
+    onAddCoupon: (String) -> Unit,
+    onUpdateCouponBalance: (String, String) -> Unit,
+) {
+    val context = LocalContext.current
+    val scrollState = rememberScrollState()
+    var statusText by remember { mutableStateOf("העלה תמונת קופון כדי לחלץ מספר בן 9 ספרות ומעלה") }
+    var isProcessingImage by remember { mutableStateOf(false) }
+    var pendingCouponNumber by remember { mutableStateOf("") }
+    var showConfirmDialog by remember { mutableStateOf(false) }
+    var balanceDraft by remember { mutableStateOf("") }
+    var editingBalanceCouponId by remember { mutableStateOf<String?>(null) }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) {
+            statusText = "בחירת תמונת הקופון בוטלה"
+            return@rememberLauncherForActivityResult
+        }
+
+        isProcessingImage = true
+        statusText = "מחלץ מספר קופון מהתמונה..."
+        extractCouponNumbersFromImage(
+            context = context,
+            uri = uri,
+            onSuccess = { candidates ->
+                isProcessingImage = false
+                val best = candidates.firstOrNull().orEmpty()
+                if (best.isBlank()) {
+                    statusText = "לא נמצא מספר קופון ברור. נסה תמונה חדה יותר"
+                } else {
+                    pendingCouponNumber = best
+                    showConfirmDialog = true
+                    statusText = if (candidates.size > 1) {
+                        "נמצאו כמה מספרים. בדוק את המספר לפני שמירה"
+                    } else {
+                        "נמצא מספר קופון. אשר שמירה"
+                    }
+                }
+            },
+            onFailure = {
+                isProcessingImage = false
+                statusText = "פענוח התמונה נכשל. נסה שוב עם צילום ברור יותר"
+            },
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(scrollState),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF1C1)),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.LocalOffer,
+                    contentDescription = "קופונים",
+                    tint = Color(0xFF8D6E00),
+                    modifier = Modifier.size(36.dp),
+                )
+                Text("ארנק הקופונים", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "שמור מספרי קופון, פתח את אתר היתרה, והצג את המספר בקופה בזמן אמת",
+                    textAlign = TextAlign.Center,
+                )
+                coupons.firstOrNull()?.let { featuredCoupon ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("מספר הקופון שלך", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        featuredCoupon.number,
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = Color(0xFF5D4037),
+                    )
+                    Text(
+                        if (featuredCoupon.remainingBalance.isNullOrBlank()) {
+                            "יתרה שמורה: עדיין לא נשמרה"
+                        } else {
+                            "יתרה שמורה: ₪${featuredCoupon.remainingBalance}"
+                        },
+                    )
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBF0)),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("ייבוא קופון", style = MaterialTheme.typography.titleSmall)
+                Text(statusText)
+                Button(
+                    onClick = { imagePickerLauncher.launch("image/*") },
+                    enabled = !isProcessingImage,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (isProcessingImage) "מעבד תמונה..." else "בחר תמונת קופון")
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBF0)),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("תבנית לבדיקת יתרה", style = MaterialTheme.typography.titleSmall)
+                OutlinedTextField(
+                    value = balanceUrlTemplate,
+                    onValueChange = onBalanceUrlTemplateChange,
+                    label = { Text("הדבק כתובת יתרה") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text("אפשר להשתמש בכתובת ישירה או בכתובת עם {coupon}")
+                Text("אם האתר לא מאפשר מילוי אוטומטי, אפשר להעתיק את המספר ולהדביק ידנית")
+            }
+        }
+
+        if (coupons.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBF0)),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                    Text("אין קופונים שמורים עדיין")
+                }
+            }
+        } else {
+            coupons.forEach { coupon ->
+                val balanceUrl = buildCouponBalanceLookupUrl(balanceUrlTemplate, coupon.number)
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBF0)),
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            if (coupon.remainingBalance.isNullOrBlank()) {
+                                "יתרה: עדיין לא נשמרה"
+                            } else {
+                                "יתרה: ₪${coupon.remainingBalance}"
+                            }
+                        )
+                        Text(
+                            if (coupon.balanceLastCheckedAt.isNullOrBlank()) {
+                                "בדיקה אחרונה: עדיין לא נבדק"
+                            } else {
+                                "בדיקה אחרונה: ${coupon.balanceLastCheckedAt}"
+                            }
+                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("coupon-number", coupon.number))
+                                    statusText = "מספר הקופון הועתק ללוח"
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("העתק מספר")
+                            }
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    editingBalanceCouponId = coupon.id
+                                    balanceDraft = coupon.remainingBalance.orEmpty()
+                                },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text("עדכן יתרה")
+                            }
+                        }
+                        Button(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(balanceUrl))
+                                runCatching { context.startActivity(intent) }
+                                    .onSuccess { statusText = "נפתח אתר היתרה עבור הקופון" }
+                                    .onFailure { statusText = "לא ניתן לפתוח את אתר היתרה כרגע" }
+                            },
+                            enabled = !balanceUrl.isNullOrBlank(),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("פתח אתר יתרה")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            title = { Text("שמור קופון") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("אפשר לערוך את המספר לפני שמירה")
+                    OutlinedTextField(
+                        value = pendingCouponNumber,
+                        onValueChange = { pendingCouponNumber = it.filter(Char::isDigit) },
+                        label = { Text("מספר קופון") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onAddCoupon(pendingCouponNumber)
+                        showConfirmDialog = false
+                        statusText = "הקופון נשמר בהצלחה"
+                        pendingCouponNumber = ""
+                    },
+                    enabled = pendingCouponNumber.filter(Char::isDigit).length >= 9,
+                ) {
+                    Text("שמור")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) {
+                    Text("ביטול")
+                }
+            },
+        )
+    }
+
+    if (editingBalanceCouponId != null) {
+        AlertDialog(
+            onDismissRequest = { editingBalanceCouponId = null },
+            title = { Text("עדכון יתרת קופון") },
+            text = {
+                OutlinedTextField(
+                    value = balanceDraft,
+                    onValueChange = { balanceDraft = it.filter { ch -> ch.isDigit() || ch == '.' || ch == ',' } },
+                    label = { Text("סכום נותר") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val couponId = editingBalanceCouponId
+                        if (couponId != null) {
+                            onUpdateCouponBalance(couponId, balanceDraft.replace(',', '.'))
+                            statusText = "יתרת הקופון עודכנה"
+                        }
+                        editingBalanceCouponId = null
+                    },
+                ) {
+                    Text("שמור")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingBalanceCouponId = null }) {
+                    Text("ביטול")
+                }
+            },
+        )
+    }
+}
+
+@Composable
 private fun YellowListSection(
+    modifier: Modifier = Modifier,
     items: List<GroceryItem>,
     onRemoveSelected: (List<Int>) -> Unit,
     onClearAll: () -> Unit,
@@ -606,7 +1012,7 @@ private fun YellowListSection(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("הרשימה המשפחתית", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
 
         Text("נבחרו: ${selected.size}", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
@@ -644,16 +1050,42 @@ private fun YellowListSection(
             }
         }
 
+        val lineColor = Color(0xFF9BB7D4)
         val noteColor = Color(0xFFFFF59D)
+        val marginLineColor = Color(0xFFD46A6A)
 
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
             colors = CardDefaults.cardColors(containerColor = noteColor),
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 240.dp, max = 420.dp)
+                    .fillMaxSize()
+                    .drawBehind {
+                        drawRect(color = noteColor)
+
+                        val lineGap = 36.dp.toPx()
+                        val startY = 28.dp.toPx()
+                        var y = startY
+                        while (y < size.height) {
+                            drawLine(
+                                color = lineColor,
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                strokeWidth = 2f,
+                            )
+                            y += lineGap
+                        }
+
+                        drawLine(
+                            color = marginLineColor,
+                            start = Offset(28.dp.toPx(), 0f),
+                            end = Offset(28.dp.toPx(), size.height),
+                            strokeWidth = 2f,
+                        )
+                    }
                     .padding(horizontal = 36.dp, vertical = 16.dp)
                     .verticalScroll(scrollState)
             ) {
@@ -719,11 +1151,21 @@ private data class GroceryItem(
     val quantity: Int,
 )
 
+private data class CouponRecord(
+    val id: String,
+    val number: String,
+    val remainingBalance: String? = null,
+    val balanceLastCheckedAt: String? = null,
+    val lastImportedAt: String? = null,
+)
+
 private const val SUPER_LIST_PREFS_NAME = "super_list_prefs"
 private const val SUPER_LIST_ITEMS_KEY = "persisted_items"
 private const val SUPER_LIST_HOUSEHOLD_CODE_KEY = "household_code"
 private const val SUPER_LIST_SYNC_CONNECTED_KEY = "sync_connected"
 private const val SUPER_LIST_FAMILY_MEMBERS_KEY = "family_members"
+private const val SUPER_LIST_COUPONS_KEY = "persisted_coupons"
+private const val SUPER_LIST_COUPON_BALANCE_URL_TEMPLATE_KEY = "coupon_balance_url_template"
 
 private fun loadPersistedItems(prefs: SharedPreferences): List<GroceryItem> {
     val raw = prefs.getString(SUPER_LIST_ITEMS_KEY, null) ?: return emptyList()
@@ -753,6 +1195,57 @@ private fun persistItems(prefs: SharedPreferences, items: List<GroceryItem>) {
     }
 
     prefs.edit().putString(SUPER_LIST_ITEMS_KEY, array.toString()).apply()
+}
+
+private fun loadPersistedCoupons(prefs: SharedPreferences): List<CouponRecord> {
+    val raw = prefs.getString(SUPER_LIST_COUPONS_KEY, null) ?: return emptyList()
+
+    return runCatching {
+        val array = JSONArray(raw)
+        buildList {
+            for (i in 0 until array.length()) {
+                val entry = array.optJSONObject(i) ?: continue
+                val id = entry.optString("id").trim()
+                val number = entry.optString("number").filter(Char::isDigit)
+                if (id.isBlank() || number.length < 9) continue
+                add(
+                    CouponRecord(
+                        id = id,
+                        number = number,
+                        remainingBalance = entry.optString("remainingBalance").ifBlank { null },
+                        balanceLastCheckedAt = entry.optString("balanceLastCheckedAt").ifBlank { null },
+                        lastImportedAt = entry.optString("lastImportedAt").ifBlank { null },
+                    ),
+                )
+            }
+        }
+    }.getOrDefault(emptyList())
+}
+
+private fun persistCoupons(prefs: SharedPreferences, coupons: List<CouponRecord>) {
+    val array = JSONArray()
+    coupons.forEach { coupon ->
+        val obj = JSONObject()
+            .put("id", coupon.id)
+            .put("number", coupon.number)
+            .put("remainingBalance", coupon.remainingBalance)
+            .put("balanceLastCheckedAt", coupon.balanceLastCheckedAt)
+            .put("lastImportedAt", coupon.lastImportedAt)
+        array.put(obj)
+    }
+
+    prefs.edit().putString(SUPER_LIST_COUPONS_KEY, array.toString()).apply()
+}
+
+private fun loadCouponBalanceUrlTemplate(prefs: SharedPreferences): String {
+    return prefs.getString(
+        SUPER_LIST_COUPON_BALANCE_URL_TEMPLATE_KEY,
+        "https://htz.mltp.co.il/Getballance",
+    )?.trim().orEmpty()
+}
+
+private fun saveCouponBalanceUrlTemplate(prefs: SharedPreferences, template: String) {
+    prefs.edit().putString(SUPER_LIST_COUPON_BALANCE_URL_TEMPLATE_KEY, template.trim()).apply()
 }
 
 private fun loadHouseholdCode(prefs: SharedPreferences): String {
@@ -786,37 +1279,207 @@ private fun saveFamilyMembers(prefs: SharedPreferences, value: Int) {
     prefs.edit().putInt(SUPER_LIST_FAMILY_MEMBERS_KEY, value.coerceAtLeast(1)).apply()
 }
 
+private fun nowIsoString(): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+    formatter.timeZone = java.util.TimeZone.getTimeZone("UTC")
+    return formatter.format(Date())
+}
+
+private fun buildCouponBalanceLookupUrl(template: String, couponNumber: String): String? {
+    val trimmedTemplate = template.trim()
+    if (trimmedTemplate.isBlank()) {
+        return null
+    }
+
+    return if (trimmedTemplate.contains("{coupon}")) {
+        trimmedTemplate.replace("{coupon}", couponNumber)
+    } else {
+        trimmedTemplate
+    }
+}
+
+private fun mergeCouponCollections(localCoupons: List<CouponRecord>, serverCoupons: List<CouponRecord>): List<CouponRecord> {
+    if (localCoupons.isEmpty()) return serverCoupons.sortedByDescending(::couponSortKey)
+    if (serverCoupons.isEmpty()) return localCoupons.sortedByDescending(::couponSortKey)
+
+    val merged = linkedMapOf<String, CouponRecord>()
+    (serverCoupons + localCoupons).forEach { coupon ->
+        val existing = merged[coupon.number]
+        merged[coupon.number] = if (existing == null) coupon else mergeCouponRecord(existing, coupon)
+    }
+
+    return merged.values.sortedByDescending(::couponSortKey)
+}
+
+private fun mergeCouponRecord(first: CouponRecord, second: CouponRecord): CouponRecord {
+    val latestBalanceTimestamp = maxIsoTimestamp(first.balanceLastCheckedAt, second.balanceLastCheckedAt)
+    val latestImportTimestamp = maxIsoTimestamp(first.lastImportedAt, second.lastImportedAt)
+    val preferFirstBalance = latestBalanceTimestamp == first.balanceLastCheckedAt
+
+    return CouponRecord(
+        id = first.id.ifBlank { second.id },
+        number = first.number,
+        remainingBalance = if (preferFirstBalance) {
+            first.remainingBalance ?: second.remainingBalance
+        } else {
+            second.remainingBalance ?: first.remainingBalance
+        },
+        balanceLastCheckedAt = latestBalanceTimestamp,
+        lastImportedAt = latestImportTimestamp,
+    )
+}
+
+private fun couponSortKey(coupon: CouponRecord): String {
+    return coupon.balanceLastCheckedAt ?: coupon.lastImportedAt ?: ""
+}
+
+private fun maxIsoTimestamp(first: String?, second: String?): String? {
+    return listOfNotNull(first?.takeIf { it.isNotBlank() }, second?.takeIf { it.isNotBlank() }).maxOrNull()
+}
+
+private fun extractCouponCandidates(rawText: String): List<String> {
+    val pattern = Regex("(?:\\d[\\d\\s-]{8,}\\d|\\d{9,})")
+    return pattern.findAll(rawText)
+        .map { match -> match.value.replace(Regex("[^0-9]"), "") }
+        .filter { candidate -> candidate.length >= 9 }
+        .distinct()
+        .sortedByDescending { candidate -> candidate.length }
+        .toList()
+}
+
+private fun extractCouponNumbersFromImage(
+    context: Context,
+    uri: Uri,
+    onSuccess: (List<String>) -> Unit,
+    onFailure: () -> Unit,
+) {
+    runCatching {
+        InputImage.fromFilePath(context, uri)
+    }.onSuccess { image ->
+        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        recognizer.process(image)
+            .addOnSuccessListener { visionText ->
+                val candidates = extractCouponCandidates(visionText.text)
+                recognizer.close()
+                if (candidates.isEmpty()) {
+                    onFailure()
+                } else {
+                    onSuccess(candidates)
+                }
+            }
+            .addOnFailureListener {
+                recognizer.close()
+                onFailure()
+            }
+    }.onFailure {
+        onFailure()
+    }
+}
+
 private object HouseholdSyncApi {
     suspend fun fetchList(baseUrl: String, householdId: String): List<GroceryItem>? = withContext(Dispatchers.IO) {
-        runCatching {
-            val url = URL("${baseUrl.trimEnd('/')}/households/${householdId}/list")
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 4000
-                readTimeout = 4000
-            }
+        syncBaseUrls(baseUrl).forEach { candidateBaseUrl ->
+            val result = runCatching {
+                val url = URL("${candidateBaseUrl.trimEnd('/')}/households/${householdId}/list")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                }
 
-            conn.inputStream.bufferedReader().use { reader ->
-                val json = JSONObject(reader.readText())
-                val itemsArray = json.optJSONArray("items") ?: JSONArray()
-                buildList {
-                    for (i in 0 until itemsArray.length()) {
-                        val item = itemsArray.optJSONObject(i) ?: continue
-                        val name = item.optString("name").trim()
-                        val quantity = item.optInt("quantity", 1).coerceIn(1, 99)
-                        if (name.isNotBlank()) {
-                            add(GroceryItem(name, quantity))
+                conn.inputStream.bufferedReader().use { reader ->
+                    val json = JSONObject(reader.readText())
+                    val itemsArray = json.optJSONArray("items") ?: JSONArray()
+                    buildList {
+                        for (i in 0 until itemsArray.length()) {
+                            val item = itemsArray.optJSONObject(i) ?: continue
+                            val name = item.optString("name").trim()
+                            val quantity = item.optInt("quantity", 1).coerceIn(1, 99)
+                            if (name.isNotBlank()) {
+                                add(GroceryItem(name, quantity))
+                            }
                         }
                     }
                 }
+            }.getOrNull()
+
+            if (result != null) {
+                return@withContext result
             }
-        }.getOrNull()
+        }
+
+        null
+    }
+
+    suspend fun fetchCoupons(baseUrl: String, householdId: String): List<CouponRecord>? = withContext(Dispatchers.IO) {
+        syncBaseUrls(baseUrl).forEach { candidateBaseUrl ->
+            val result = runCatching {
+                val url = URL("${candidateBaseUrl.trimEnd('/')}/households/${householdId}/coupons")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                }
+
+                conn.inputStream.bufferedReader().use { reader ->
+                    val json = JSONObject(reader.readText())
+                    val couponsArray = json.optJSONArray("coupons") ?: JSONArray()
+                    buildList {
+                        for (i in 0 until couponsArray.length()) {
+                            val coupon = couponsArray.optJSONObject(i) ?: continue
+                            val number = coupon.optString("couponNumber").filter(Char::isDigit)
+                            if (number.length < 9) continue
+                            add(
+                                CouponRecord(
+                                    id = coupon.optString("id").ifBlank { "coupon-$number" },
+                                    number = number,
+                                    remainingBalance = coupon.optString("remainingBalance").ifBlank { null },
+                                    balanceLastCheckedAt = coupon.optString("balanceLastCheckedAt").ifBlank { null },
+                                    lastImportedAt = coupon.optString("lastImportedAt").ifBlank { null },
+                                ),
+                            )
+                        }
+                    }
+                }
+            }.getOrNull()
+
+            if (result != null) {
+                return@withContext result
+            }
+        }
+
+        null
     }
 
     suspend fun pushAddOrMerge(baseUrl: String, householdId: String, itemName: String, quantity: Int): Boolean =
         withContext(Dispatchers.IO) {
+            syncBaseUrls(baseUrl).any { candidateBaseUrl ->
+                runCatching {
+                    val url = URL("${candidateBaseUrl.trimEnd('/')}/households/${householdId}/mutations")
+                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        connectTimeout = 4000
+                        readTimeout = 4000
+                        doOutput = true
+                        setRequestProperty("Content-Type", "application/json")
+                    }
+
+                    val body = JSONObject()
+                        .put("clientActionId", "android-${System.currentTimeMillis()}")
+                        .put("actionType", "ADD_OR_MERGE")
+                        .put("itemName", itemName)
+                        .put("quantityDelta", quantity.coerceIn(1, 99))
+
+                    conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
+                    conn.responseCode in 200..299
+                }.getOrDefault(false)
+            }
+        }
+
+    suspend fun pushRemove(baseUrl: String, householdId: String, itemName: String): Boolean = withContext(Dispatchers.IO) {
+        syncBaseUrls(baseUrl).any { candidateBaseUrl ->
             runCatching {
-                val url = URL("${baseUrl.trimEnd('/')}/households/${householdId}/mutations")
+                val url = URL("${candidateBaseUrl.trimEnd('/')}/households/${householdId}/mutations")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     connectTimeout = 4000
@@ -826,36 +1489,50 @@ private object HouseholdSyncApi {
                 }
 
                 val body = JSONObject()
-                    .put("clientActionId", "android-${System.currentTimeMillis()}")
-                    .put("actionType", "ADD_OR_MERGE")
+                    .put("clientActionId", "android-${System.currentTimeMillis()}-${itemName.hashCode()}")
+                    .put("actionType", "REMOVE")
                     .put("itemName", itemName)
-                    .put("quantityDelta", quantity.coerceIn(1, 99))
 
                 conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
                 conn.responseCode in 200..299
             }.getOrDefault(false)
         }
-
-    suspend fun pushRemove(baseUrl: String, householdId: String, itemName: String): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            val url = URL("${baseUrl.trimEnd('/')}/households/${householdId}/mutations")
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = 4000
-                readTimeout = 4000
-                doOutput = true
-                setRequestProperty("Content-Type", "application/json")
-            }
-
-            val body = JSONObject()
-                .put("clientActionId", "android-${System.currentTimeMillis()}-${itemName.hashCode()}")
-                .put("actionType", "REMOVE")
-                .put("itemName", itemName)
-
-            conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
-            conn.responseCode in 200..299
-        }.getOrDefault(false)
     }
+
+    suspend fun upsertCoupon(baseUrl: String, householdId: String, coupon: CouponRecord): Boolean = withContext(Dispatchers.IO) {
+        syncBaseUrls(baseUrl).any { candidateBaseUrl ->
+            runCatching {
+                val url = URL("${candidateBaseUrl.trimEnd('/')}/households/${householdId}/coupons")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                }
+
+                val body = JSONObject()
+                    .put("clientActionId", "android-coupon-${System.currentTimeMillis()}-${coupon.number.hashCode()}")
+                    .put("couponNumber", coupon.number)
+                    .put("remainingBalance", coupon.remainingBalance)
+                    .put("balanceLastCheckedAt", coupon.balanceLastCheckedAt)
+                    .put("lastImportedAt", coupon.lastImportedAt ?: nowIsoString())
+
+                conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
+                conn.responseCode in 200..299
+            }.getOrDefault(false)
+        }
+    }
+}
+
+private fun syncBaseUrls(baseUrl: String): List<String> {
+    val primary = baseUrl.trim().trimEnd('/')
+    val urls = mutableListOf(primary)
+    if (primary.contains("dev-list.friedman-makers.com")) {
+        urls += "http://127.0.0.1:8789"
+        urls += "http://192.168.1.219:8789"
+    }
+    return urls.distinct()
 }
 
 internal data class ParsedVoiceItem(

@@ -6,6 +6,7 @@ Validate MVP core flows and gate evidence for:
 - Voice add (hold-to-talk)
 - Shared sync across household members
 - Select/remove
+- Coupon import, reveal, and stored-balance display
 - Hebrew RTL UX + accessibility baseline
 - Offline queue and reconnect replay
 
@@ -150,6 +151,49 @@ Note: current runnable implementation uses a lightweight local API server with h
 6. Verify activity log shows ordered events and remove-wins-if-latest behavior.
 
 ## Scenario G: Consent and privacy
+
+## Scenario H: Coupon import and balance tracking
+
+1. Open the main screen and tap the coupon icon in the top-right area.
+2. Press the coupon image import action and choose a gallery image containing the coupon.
+3. Verify the app proposes a 9+ digit coupon number and allows editing before save.
+4. Save the coupon and verify the coupon number appears immediately in the upper summary/header area.
+5. Verify the lower coupon card does not repeat the coupon number and still shows balance/update actions.
+6. If a balance-check URL template is configured, open the balance site from the lower coupon card.
+7. Save the remaining balance manually in the app and verify the balance + last-checked timestamp are displayed.
+8. Open the same household on a second family device and verify the coupon number + stored balance appear there as well.
+
+## Scenario I: One-device household sync fallback
+
+Use this when only one mobile device is available.
+
+1. Start the shared sync stack from repo root:
+   - `./scripts/sync/start-sync-stack.sh`
+2. Open the app on the phone and note the family code from the settings screen.
+3. Add or update a coupon on the phone.
+4. On the computer, verify the backend received the coupon state:
+   - `curl "http://127.0.0.1:8789/households/<FAMILY_CODE>/coupons"`
+5. Simulate a second household member from the computer by posting a balance update:
+   - `curl -X POST "http://127.0.0.1:8789/households/<FAMILY_CODE>/coupons" -H "Content-Type: application/json" -d '{"clientActionId":"manual-test-1","couponNumber":"<COUPON_NUMBER>","remainingBalance":"42","balanceLastCheckedAt":"2026-03-16T12:00:00Z","lastImportedAt":"2026-03-16T12:00:00Z"}'`
+6. Wait a few seconds for polling and verify the phone updates to the new balance.
+7. Change the balance again on the phone and re-run the `GET /coupons` command to confirm the backend converges to the new value.
+8. Repeat the same pattern for grocery items:
+   - `curl -X POST "http://127.0.0.1:8789/households/<FAMILY_CODE>/mutations" -H "Content-Type: application/json" -d '{"clientActionId":"manual-item-test-1","actionType":"ADD_OR_MERGE","itemName":"בננות","quantityDelta":3}'`
+   - verify the phone list updates after polling
+   - then add/change an item on the phone and confirm `GET /list` reflects it
+
+### Notes for current Android debug validation
+
+- The active household code may include the app prefix, for example `SL-890248`; use the exact value shown in the app settings screen for API tests.
+- In the current local-device debug setup, Android may fail DNS resolution for `dev-list.friedman-makers.com` on some phones.
+- The debug app therefore includes fallback sync attempts to `http://127.0.0.1:8789` and the host LAN address used during validation.
+- Successful one-phone validation evidence captured in this repo used:
+  - household `SL-890248`
+  - coupon `11447830316028`
+  - server-to-phone coupon balance update to `42`
+  - phone-to-server coupon balance update to `80`
+  - server-to-phone list add `בננות ×3`
+  - phone-to-server list add `חלב ×5`
 
 ## Automated parser verification commands (Android)
 

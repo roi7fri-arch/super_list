@@ -22,11 +22,36 @@ function getStore(householdId) {
     households.set(householdId, {
       actions: new Set(),
       items: new Map(),
+      coupons: new Map(),
       events: [],
       seq: 0,
     });
   }
   return households.get(householdId);
+}
+
+function normalizeCouponNumber(raw) {
+  return String(raw ?? '').replace(/\D+/g, '');
+}
+
+function maxIsoTimestamp(first, second) {
+  return [first, second].filter(Boolean).sort().at(-1) ?? null;
+}
+
+function mergeCoupon(existing, incoming) {
+  const balanceLastCheckedAt = maxIsoTimestamp(existing?.balanceLastCheckedAt, incoming.balanceLastCheckedAt);
+  const keepExistingBalance = balanceLastCheckedAt && balanceLastCheckedAt === existing?.balanceLastCheckedAt;
+
+  return {
+    id: existing?.id ?? incoming.id ?? `coupon-${incoming.couponNumber}`,
+    couponNumber: incoming.couponNumber,
+    remainingBalance: keepExistingBalance
+      ? (existing?.remainingBalance ?? incoming.remainingBalance ?? null)
+      : (incoming.remainingBalance ?? existing?.remainingBalance ?? null),
+    balanceLastCheckedAt,
+    lastImportedAt: maxIsoTimestamp(existing?.lastImportedAt, incoming.lastImportedAt) ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function pushEvent(store, householdId, event) {
@@ -57,6 +82,23 @@ app.get('/households/:householdId/list', (req, res) => {
     householdId,
     serverTime: new Date().toISOString(),
     items,
+  });
+});
+
+app.get('/households/:householdId/coupons', (req, res) => {
+  const { householdId } = req.params;
+  const store = getStore(householdId);
+
+  const coupons = Array.from(store.coupons.values()).sort((a, b) => {
+    const left = a.balanceLastCheckedAt ?? a.lastImportedAt ?? '';
+    const right = b.balanceLastCheckedAt ?? b.lastImportedAt ?? '';
+    return right.localeCompare(left);
+  });
+
+  res.json({
+    householdId,
+    serverTime: new Date().toISOString(),
+    coupons,
   });
 });
 
@@ -123,6 +165,42 @@ app.post('/households/:householdId/mutations', (req, res) => {
   });
 
   return res.json({ status: 'ok', event });
+});
+
+app.post('/households/:householdId/coupons', (req, res) => {
+  const { householdId } = req.params;
+  const {
+    clientActionId,
+    couponNumber,
+    remainingBalance,
+    balanceLastCheckedAt,
+    lastImportedAt,
+  } = req.body ?? {};
+
+  const normalizedCouponNumber = normalizeCouponNumber(couponNumber);
+  if (normalizedCouponNumber.length < 9) {
+    return res.status(400).json({ error: 'couponNumber must contain at least 9 digits' });
+  }
+
+  const store = getStore(householdId);
+  if (clientActionId && store.actions.has(clientActionId)) {
+    return res.json({ status: 'duplicate_ignored' });
+  }
+
+  if (clientActionId) {
+    store.actions.add(clientActionId);
+  }
+
+  const merged = mergeCoupon(store.coupons.get(normalizedCouponNumber), {
+    id: `coupon-${normalizedCouponNumber}`,
+    couponNumber: normalizedCouponNumber,
+    remainingBalance: String(remainingBalance ?? '').trim() || null,
+    balanceLastCheckedAt: String(balanceLastCheckedAt ?? '').trim() || null,
+    lastImportedAt: String(lastImportedAt ?? '').trim() || new Date().toISOString(),
+  });
+
+  store.coupons.set(normalizedCouponNumber, merged);
+  return res.json({ status: 'ok', coupon: merged });
 });
 
 app.get('/households/:householdId/sync/replay', (req, res) => {

@@ -231,6 +231,18 @@
 - [x] T136 [P] Remove editable sync URL field and keep Cloudflare sync endpoint hard-coded in android/app/src/main/java/com/superlist/SuperListApp.kt
 - [x] T137 [P] Configure Android build-type sync URLs (debug->dev-list, release->list) in android/app/build.gradle.kts and SuperListApp.kt
 - [x] T138 [P] Configure Cloudflare DNS+tunnel ingress for dev-list.friedman-makers.com to local API
+- [x] T139 [P] Add Android coupon OCR dependency and gallery import flow in android/app/build.gradle.kts and android/app/src/main/java/com/superlist/SuperListApp.kt
+- [x] T140 [P] Implement Android coupon management screen with masked/unmasked number display in android/app/src/main/java/com/superlist/SuperListApp.kt
+- [x] T141 [P] Implement Android local persistence for coupon numbers, balance metadata, and lookup URL template in android/app/src/main/java/com/superlist/SuperListApp.kt
+- [x] T142 [P] Add manual coupon balance update workflow and configurable `{coupon}` balance URL launcher in android/app/src/main/java/com/superlist/SuperListApp.kt
+- [x] T143 Update spec/plan/data-model/quickstart/research for coupon OCR and balance support in specs/001-shared-hebrew-voice-list/
+- [x] T144 Rebuild Android debug app after coupon feature implementation using android/gradlew :app:assembleDebug
+- [x] T145 [P] Fix Android coupon-page back navigation to return directly to main voice screen in android/app/src/main/java/com/superlist/SuperListApp.kt
+- [x] T146 [P] Simplify Android coupon cards to show one always-visible coupon number field in android/app/src/main/java/com/superlist/SuperListApp.kt
+- [x] T147 [P] Add household coupon number/balance sync endpoints in api/server.js and Android sync client in android/app/src/main/java/com/superlist/SuperListApp.kt
+- [x] T148 Update spec/plan/data-model/quickstart for always-visible shared household coupons in specs/001-shared-hebrew-voice-list/
+- [x] T149 Update spec/quickstart for header-only coupon number presentation and one-device household sync fallback in specs/001-shared-hebrew-voice-list/
+- [x] T150 Document successful one-device bidirectional coupon+list sync validation and Android debug fallback URLs in specs/001-shared-hebrew-voice-list/
 
 ---
 
@@ -250,6 +262,7 @@
 - **US2 (P2)**: starts after Phase 2; integrates with US1 list state but independently testable.
 - **US3 (P3)**: starts after Phase 2; can proceed in parallel with US2 if staffing allows.
 - **US4 (P1 sync)**: starts after Phase 2; depends on foundational sync/auth components and validates mandatory household synchronization.
+- **Coupon utility flow**: can be implemented after Android app baseline is stable; depends only on local app persistence and image-processing support.
 
 ### Task-Level Dependency Highlights
 
@@ -303,6 +316,7 @@
 - **FR-033/034 + NFR-018** -> T095-T098 -> tests/artifacts/mobile-device-runs/android-critical-flow/
 - **FR-040/041/042/043/044** -> T106-T118, T123-T125 -> android/app/src/test/java/com/superlist/TranscriptSeparationTest.kt, android/app/src/androidTest/java/com/superlist/realdevice/TranscriptSeparationConnectedTest.kt
 - **FR-045** -> T121-T122 -> android/app/src/main/java/com/superlist/SuperListApp.kt, specs/001-shared-hebrew-voice-list/quickstart.md
+- **FR-046/047/048/049/050/051/052** -> T139-T144 -> android/app/src/main/java/com/superlist/SuperListApp.kt, android/app/build.gradle.kts, specs/001-shared-hebrew-voice-list/
 - **GT-003 real-device requirement** -> T059-T070, T072 -> tests/artifacts/mobile-device-runs/
 
 ---

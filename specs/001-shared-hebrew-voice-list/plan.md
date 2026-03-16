@@ -10,18 +10,20 @@ voice-led interaction on iOS and Android. The primary flow is hold-to-talk (pres
 release to commit), parse Hebrew product+quantity, update shared list, and sync to household
 members in near real-time. The plan uses server-authoritative conflict resolution
 (timestamp last-write-wins; remove-wins-if-latest), offline action queue with reconnect replay,
-and strict privacy constraints (no raw audio persistence).
+strict privacy constraints (no raw audio persistence), and a coupon utility flow for importing
+supermarket coupon images, extracting 9+ digit coupon numbers, storing remaining-balance metadata,
+and synchronizing coupon number + balance across the household.
 
 ## Technical Context
 
 **Language/Version**: Swift 5.10+ (iOS), Kotlin 2.x (Android + KMP), TypeScript 5.x on Node.js 20 LTS (backend)
 
-**Primary Dependencies**: SwiftUI, Jetpack Compose, Kotlin Multiplatform shared domain module, Fastify, WebSocket gateway, PostgreSQL 16, Redis, approved Hebrew STT SDK/API
+**Primary Dependencies**: SwiftUI, Jetpack Compose, Kotlin Multiplatform shared domain module, ML Kit text recognition, Fastify, WebSocket gateway, PostgreSQL 16, Redis, approved Hebrew STT SDK/API
 
 **Storage**:
 - Server: PostgreSQL (households, memberships, list projection, immutable event log)
 - Server cache/realtime fan-out: Redis
-- Client: local SQLite for list snapshot + pending action queue
+- Client: local SQLite for list snapshot + pending action queue; local coupon metadata cache and balance lookup template storage
 
 **Testing**:
 - Backend: Vitest/Jest + integration harness + contract schema tests
@@ -47,6 +49,8 @@ and strict privacy constraints (no raw audio persistence).
 - No third-party data sale
 
 **Allowed Data Sources**: Voice input, approved Hebrew STT output, user-created entries
+
+**Coupon Data Sources**: User-provided coupon images, OCR-extracted coupon numbers, user-entered remaining balance values, and a user-configured balance-check URL template
 
 **Forbidden Data Sources**: Unlicensed catalogs, long-term raw audio retention, unapproved sharing
 
@@ -154,6 +158,13 @@ Fallback polling policy:
   1. Generic app icon: weaker grocery context signaling.
   2. Plain card list only: lower visual affordance for handwritten-list mental model.
 
+### A6) Coupon capture and balance lookup approach
+- **Decision**: Import coupon images from gallery, perform OCR on-device, persist only structured coupon metadata locally, and use a configurable lookup URL template as the near-term balance-check integration path.
+- **Why**: On-device OCR is privacy-friendly and fast, while URL-template configuration avoids hard-coding a fragile supermarket integration before the real balance endpoint/parser is known.
+- **Alternatives rejected**:
+  1. Storing raw coupon images long-term: unnecessary retained data for the MVP need.
+  2. Hard-coded supermarket scraping in mobile client: fragile and difficult to maintain across website changes.
+
 ## Project Structure
 
 ### Documentation (this feature)
@@ -231,6 +242,8 @@ Versioning/backward compatibility:
 - Name normalization/duplicate merge → FR-013.
 - Multi-item transcript separation (`וגם`, standalone `ו`, `ולחם`, `ושלוש`, punctuation/`ואז`)
   including regression phrases `שני חלב וגם לחם` and `שני לחם וגבינה אחת ושלוש מוצרלה` → FR-042/043/044.
+- Coupon OCR candidate extraction and 9+ digit filtering → FR-047/048.
+- Coupon masking, local persistence, and balance metadata updates → FR-049/050/052.
 - Conflict resolver (LWW/remove-wins) → FR-021/022.
 - Offline queue replay/idempotency → FR-018/019.
 
@@ -257,6 +270,7 @@ Current runnable Android implementation note:
 - Fallback polling scenario: websocket unavailable, updates converge via polling on second device.
 - Real-device sync scenario: connected Android+iOS devices as two household members.
 - Clear-list scenario: one-press full-list clear transitions list to empty state and sync status updates.
+- Coupon import scenario: Android user imports a coupon image, confirms extracted number, and sees masked saved coupon card.
 
 ### Regression Policy
 - Every defect fix adds a failing test first and passing test after fix.
