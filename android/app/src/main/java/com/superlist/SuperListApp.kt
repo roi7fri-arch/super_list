@@ -66,6 +66,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
@@ -316,54 +317,58 @@ fun SuperListApp() {
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            Row(
+            Box(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                if (screen != "voice") {
-                    Button(
-                        onClick = {
-                            screen = "voice"
-                        },
-                        modifier = Modifier.width(64.dp).height(44.dp),
-                        contentPadding = PaddingValues(0.dp),
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = "מעבר למסך קולי",
-                                modifier = Modifier.size(30.dp),
-                            )
-                        }
-                    }
-                } else {
-                    Spacer(modifier = Modifier.width(64.dp))
-                }
-
-                Text(
-                    text = "Super List",
-                    style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
-                )
-
-                if (screen == "voice") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { screen = "coupons" }, modifier = Modifier.height(36.dp)) {
-                            Icon(
-                                imageVector = Icons.Filled.LocalOffer,
-                                contentDescription = "מעבר לקופונים",
-                            )
-                        }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart),
+                ) {
+                    if (screen == "voice") {
                         Button(onClick = { screen = "settings" }, modifier = Modifier.height(36.dp)) {
                             Icon(
                                 imageVector = Icons.Filled.Settings,
                                 contentDescription = "מעבר להגדרות",
                             )
                         }
+                    } else {
+                        Button(
+                            onClick = {
+                                screen = "voice"
+                            },
+                            modifier = Modifier.width(64.dp).height(44.dp),
+                            contentPadding = PaddingValues(0.dp),
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    contentDescription = "מעבר למסך קולי",
+                                    modifier = Modifier.size(30.dp),
+                                )
+                            }
+                        }
                     }
-                } else {
-                    Spacer(modifier = Modifier.width(104.dp))
+                }
+
+                Text(
+                    text = "רשימת סופר",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd),
+                ) {
+                    if (screen == "voice") {
+                        Button(onClick = { screen = "coupons" }, modifier = Modifier.height(36.dp)) {
+                            Icon(
+                                imageVector = Icons.Filled.LocalOffer,
+                                contentDescription = "מעבר לקופונים",
+                            )
+                        }
+                    }
                 }
             }
 
@@ -387,13 +392,6 @@ fun SuperListApp() {
                             pushRemoveMany(removedSnapshot)
                         }
                     },
-                    onClearAll = {
-                        val removedSnapshot = items.toList()
-                        items.clear()
-                        if (syncConnected) {
-                            pushRemoveMany(removedSnapshot)
-                        }
-                    },
                 )
 
                 "coupons" -> CouponTab(
@@ -408,12 +406,20 @@ fun SuperListApp() {
                     householdCode = householdCode,
                     familyMembers = familyMembers,
                     syncStatus = syncStatus,
+                    hasItems = items.isNotEmpty(),
                     onJoinHousehold = { enteredCode ->
                         if (enteredCode.isNotBlank()) {
                             householdCode = enteredCode.trim().uppercase()
                             syncConnected = true
                             familyMembers = maxOf(familyMembers, 2)
                             syncStatus = "מחובר למשפחה בקוד: $householdCode"
+                        }
+                    },
+                    onClearAll = {
+                        val removedSnapshot = items.toList()
+                        items.clear()
+                        if (syncConnected) {
+                            pushRemoveMany(removedSnapshot)
                         }
                     },
                 )
@@ -427,10 +433,12 @@ private fun VoiceTab(
     onAddParsed: (ParsedVoiceItem) -> Unit,
     items: List<GroceryItem>,
     onRemoveSelected: (List<Int>) -> Unit,
-    onClearAll: () -> Unit,
 ) {
     val context = LocalContext.current
     var statusText by remember { mutableStateOf("לחץ על הכפתור האדום להתחלה/עצירה של מצב רציף") }
+    var showManualAddDialog by remember { mutableStateOf(false) }
+    var manualItemName by remember { mutableStateOf("") }
+    var manualQuantityText by remember { mutableStateOf("1") }
     var isHolding by remember { mutableStateOf(false) }
     var isRecognizing by remember { mutableStateOf(false) }
     var pendingPermissionStart by remember { mutableStateOf(false) }
@@ -579,8 +587,14 @@ private fun VoiceTab(
         modifier = Modifier
             .fillMaxSize(),
     ) {
-        Text("דיבור רציף בזמן לחיצה")
-        Spacer(modifier = Modifier.height(18.dp))
+        OutlinedButton(
+            onClick = { showManualAddDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("הוסף פריט בהקלדה")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
         Box(
             modifier = Modifier
                 .size(196.dp)
@@ -637,9 +651,6 @@ private fun VoiceTab(
             )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(statusText, textAlign = TextAlign.Center)
-
         if (pendingBatch.isNotEmpty()) {
             Spacer(modifier = Modifier.height(10.dp))
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -675,12 +686,62 @@ private fun VoiceTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         YellowListSection(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1.35f),
             items = items,
             onRemoveSelected = onRemoveSelected,
-            onClearAll = onClearAll,
+        )
+    }
+
+    if (showManualAddDialog) {
+        AlertDialog(
+            onDismissRequest = { showManualAddDialog = false },
+            title = { Text("הוספת פריט בהקלדה") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = manualItemName,
+                        onValueChange = { manualItemName = it },
+                        label = { Text("שם פריט") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = manualQuantityText,
+                        onValueChange = {
+                            manualQuantityText = it.filter(Char::isDigit).ifBlank { "" }
+                        },
+                        label = { Text("כמות") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val quantity = manualQuantityText.toIntOrNull()?.coerceIn(1, 99) ?: 1
+                        onAddParsed(ParsedVoiceItem(name = manualItemName.trim(), quantity = quantity))
+                        statusText = "נוסף ידנית: ${manualItemName.trim()} ×$quantity"
+                        manualItemName = ""
+                        manualQuantityText = "1"
+                        showManualAddDialog = false
+                    },
+                    enabled = manualItemName.trim().isNotBlank(),
+                ) {
+                    Text("הוסף")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showManualAddDialog = false
+                        manualItemName = ""
+                        manualQuantityText = "1"
+                    },
+                ) {
+                    Text("ביטול")
+                }
+            },
         )
     }
 }
@@ -690,9 +751,12 @@ private fun SettingsTab(
     householdCode: String,
     familyMembers: Int,
     syncStatus: String,
+    hasItems: Boolean,
     onJoinHousehold: (String) -> Unit,
+    onClearAll: () -> Unit,
 ) {
     var joinCode by remember { mutableStateOf("") }
+    var showClearListDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("הגדרות משפחה וסנכרון", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
@@ -718,6 +782,49 @@ private fun SettingsTab(
                 }
             }
         }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("אזור מסוכן", style = MaterialTheme.typography.titleSmall, color = Color(0xFFB71C1C))
+                Text("ניקוי כל הרשימה הועבר לכאן כדי למנוע מחיקה בטעות בזמן שימוש יומיומי")
+                Button(
+                    onClick = { showClearListDialog = true },
+                    enabled = hasItems,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFB71C1C),
+                        contentColor = Color.White,
+                        disabledContainerColor = Color(0xFFE0B4B4),
+                        disabledContentColor = Color(0xFF6D4C41),
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("נקה את כל הרשימה")
+                }
+            }
+        }
+    }
+
+    if (showClearListDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearListDialog = false },
+            title = { Text("למחוק את כל הרשימה?") },
+            text = { Text("הפעולה תמחק את כל הפריטים לכל בני הבית המחוברים.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onClearAll()
+                        showClearListDialog = false
+                    },
+                ) {
+                    Text("מחק הכל")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearListDialog = false }) {
+                    Text("ביטול")
+                }
+            },
+        )
     }
 }
 
@@ -1000,7 +1107,6 @@ private fun YellowListSection(
     modifier: Modifier = Modifier,
     items: List<GroceryItem>,
     onRemoveSelected: (List<Int>) -> Unit,
-    onClearAll: () -> Unit,
 ) {
     val selected = remember { mutableStateListOf<Int>() }
     val scrollState = rememberScrollState()
@@ -1013,42 +1119,20 @@ private fun YellowListSection(
         }
     }
 
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("הרשימה המשפחתית", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-
-        Text("נבחרו: ${selected.size}", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = {
-                    onClearAll()
-                    selected.clear()
-                },
-                enabled = items.isNotEmpty(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFB71C1C),
-                    contentColor = Color.White,
-                    disabledContainerColor = Color(0xFFE0B4B4),
-                    disabledContentColor = Color(0xFF6D4C41),
-                ),
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("נקה רשימה")
-            }
-            OutlinedButton(
-                onClick = {
-                    onRemoveSelected(selected.toList())
-                    selected.clear()
-                },
-                enabled = selected.isNotEmpty() && items.isNotEmpty(),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color(0xFF6D4C41),
-                    disabledContentColor = Color(0xFFBCAAA4),
-                ),
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("אשר מחיקה")
-            }
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        OutlinedButton(
+            onClick = {
+                onRemoveSelected(selected.toList())
+                selected.clear()
+            },
+            enabled = selected.isNotEmpty() && items.isNotEmpty(),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = Color(0xFF6D4C41),
+                disabledContentColor = Color(0xFFBCAAA4),
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("אשר מחיקה")
         }
 
         val lineColor = Color(0xFF9BB7D4)
